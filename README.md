@@ -162,15 +162,6 @@ orchestration:
 
 ---
 
-## Paper
-
-EveFL is the implementation accompanying the conference paper:
-
-> **EveFL: Quantum Channel-Aware Federated Learning with Real-Time Eavesdropper Detection and Adaptive Aggregation Control**  
-> Uzma Taheen Khan, Parineeta Rana — Atria Institute of Technology, 2025
-
----
-
 ## Requirements
 
 - Python 3.12 (pinned)

@@ -173,5 +173,5 @@ orchestration:
 
 | | |
 |:---|:---|
-| **Uzma Taheen Khan** | 📧 uztaheenkhan05@gmail.com · [LinkedIn](https://linkedin.com/in/utk05) · [GitHub](https://github.com/utk05) |
-| **Parineeta Rana** | 📧 parineetarana1@gmail.com · [LinkedIn](https://linkedin.com/in/parineeta-rana) · [GitHub](https://github.com/parineetarana) |
+| **Uzma Taheen Khan** | 📧 uztaheenkhan05@gmail.com · [LinkedIn](https://www.linkedin.com/in/utk05) · [GitHub](https://github.com/utk05) |
+| **Parineeta Rana** | 📧 parineetarana1@gmail.com · [LinkedIn](https://www.linkedin.com/in/parineeta-rana/) · [GitHub](https://github.com/Parineeta-2307) |

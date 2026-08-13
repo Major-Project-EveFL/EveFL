@@ -65,43 +65,61 @@ class BB84Protocol(QKDProtocol):
     def name(self) -> str:
         return "bb84"
 
-    def run_exchange(self, n_qubits: int, eavesdropper_active: bool = False) -> QKDResult:
-        alice_bits = [self._rng.randint(0, 1) for _ in range(n_qubits)]
+    def run_exchange(
+        self,
+        n_qubits: int,
+        eavesdropper_active: bool = False,   # kept for backward compat with existing tests
+        eve_intercept_rate: float | None = None,  # NEW: probabilistic alpha ∈ [0,1]
+    ) -> QKDResult:
+        """
+        Run one full BB84 exchange.
+
+        eve_intercept_rate takes priority over eavesdropper_active.
+        Set eve_intercept_rate=0.44 to simulate a 44% intercept-resend attack.
+        eavesdropper_active=True is shorthand for eve_intercept_rate=1.0.
+        """
+        # Resolve effective interception probability
+        if eve_intercept_rate is not None:
+            if not 0.0 <= eve_intercept_rate <= 1.0:
+                raise ValueError(f"eve_intercept_rate must be in [0,1], got {eve_intercept_rate}")
+            effective_alpha = eve_intercept_rate
+        else:
+            effective_alpha = 1.0 if eavesdropper_active else 0.0
+
+        alice_bits  = [self._rng.randint(0, 1) for _ in range(n_qubits)]
         alice_bases = [self._rng.randint(0, 1) for _ in range(n_qubits)]
-        bob_bases = [self._rng.randint(0, 1) for _ in range(n_qubits)]
+        bob_bases   = [self._rng.randint(0, 1) for _ in range(n_qubits)]
 
         bob_results = []
         for i in range(n_qubits):
             bit, send_basis = alice_bits[i], alice_bases[i]
 
-            if eavesdropper_active:
-                # Intercept-resend: Eve measures in a random basis, then
-                # resends a fresh qubit prepared in her measured bit/basis.
+            # Per-photon interception — probabilistic if alpha < 1
+            if effective_alpha > 0.0 and self._rng.random() < effective_alpha:
                 eve_basis = self._rng.randint(0, 1)
-                eve_bit = _prepare_and_measure(bit, send_basis, eve_basis, self._simulator)
+                eve_bit   = _prepare_and_measure(bit, send_basis, eve_basis, self._simulator)
                 bit, send_basis = eve_bit, eve_basis
 
             outcome = _prepare_and_measure(bit, send_basis, bob_bases[i], self._simulator)
             bob_results.append(outcome)
 
-        # Basis sifting: keep only positions where Alice's and Bob's bases matched
-        sifted_alice = []
-        sifted_bob = []
+        # Basis sifting
+        sifted_alice, sifted_bob = [], []
         for i in range(n_qubits):
             if alice_bases[i] == bob_bases[i]:
                 sifted_alice.append(alice_bits[i])
                 sifted_bob.append(bob_results[i])
 
         n_sifted = len(sifted_alice)
-        qber = self._estimate_qber(sifted_alice, sifted_bob)
+        qber     = self._estimate_qber(sifted_alice, sifted_bob)
 
         return QKDResult(
-            sifted_key=sifted_alice,  # final key material (post-sample-removal happens upstream if desired)
+            sifted_key=sifted_alice,
             qber=qber,
             n_qubits_sent=n_qubits,
             n_sifted=n_sifted,
-            eavesdropper_active=eavesdropper_active,
-            metadata={"sample_fraction": self._sample_fraction},
+            eavesdropper_active=effective_alpha > 0.0,
+            metadata={"sample_fraction": self._sample_fraction, "eve_intercept_rate": effective_alpha},
         )
 
     def _estimate_qber(self, sifted_alice: list[int], sifted_bob: list[int]) -> float:

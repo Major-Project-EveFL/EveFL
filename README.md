@@ -187,7 +187,12 @@ EveFL is the implementation accompanying the conference paper:
   [NIH Box](https://nihcc.app.box.com/v/ChestXray-NIHCC)
 
 
+<<<<<<< HEAD
   ## 📫 Let's connect
   📧 uztaheenkhan05@gmail.com · [LinkedIn](https://linkedin.com/in/uzma-taheen-khan) · [GitHub](https://www.github.com/utk05)
   
   📧 parineetarana1@gmail.com · [LinkedIn](https://linkedin.com/in/parineeta-rana) · [GitHub](https://www.github.com/Parineeta-2307)
+=======
+  ## 📫 Have any question? Let's connect
+  📧 parineetarana1@gmail.com · [LinkedIn](https://linkedin.com/in/parineeta-rana) · [GitHub](https://www.github.com/Parineeta-2307)
+>>>>>>> f296f1e (Restructures readme)

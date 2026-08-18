@@ -1,21 +1,11 @@
 """
-BB84 QKD simulation using Qiskit.
-
-Simulates Alice -> Bob qubit transmission with random bases, optional
-Eve intercept-resend attack, basis sifting, and QBER estimation via
-public comparison of a sample subset of the sifted key.
-
-This is a *simulation* — qubits are represented as single-qubit Qiskit
-circuits measured via AerSimulator. No real quantum hardware involved.
+BB84 quantum key distribution protocol implementation using Qiskit.
+Thiis is a simulation. Qubits are represented as single-qubit quantum circuits, and measurements are performed using Qiskit's AerSimulator. No real quntum hardware is used.
 """
-
 from __future__ import annotations
-
 import random
-
 from qiskit import QuantumCircuit
 from qiskit_aer import AerSimulator
-
 from evefl.quantum.base import QKDProtocol, QKDResult
 from evefl.registry import Registry
 
@@ -65,27 +55,29 @@ class BB84Protocol(QKDProtocol):
     def name(self) -> str:
         return "bb84"
 
-    def run_exchange(self, n_qubits: int, eavesdropper_active: bool = False) -> QKDResult:
-        alice_bits = [self._rng.randint(0, 1) for _ in range(n_qubits)]
+    def run_exchange(self, n_qubits: int, intercept_probability: float=0.0) -> QKDResult:
+        
+        if not 0.0<=intercept_probability<=1.0:
+            raise ValueError("intercept_probability must be in [0.0,1.0], got{intercept_probability}")
+
+        alice_bits  = [self._rng.randint(0, 1) for _ in range(n_qubits)]
         alice_bases = [self._rng.randint(0, 1) for _ in range(n_qubits)]
-        bob_bases = [self._rng.randint(0, 1) for _ in range(n_qubits)]
+        bob_bases   = [self._rng.randint(0, 1) for _ in range(n_qubits)]
 
         bob_results = []
         for i in range(n_qubits):
             bit, send_basis = alice_bits[i], alice_bases[i]
 
-            if eavesdropper_active:
-                # Intercept-resend: Eve measures in a random basis, then
-                # resends a fresh qubit prepared in her measured bit/basis.
+            if self._rng.random() < intercept_probability:
                 eve_basis = self._rng.randint(0, 1)
-                eve_bit = _prepare_and_measure(bit, send_basis, eve_basis, self._simulator)
+                eve_bit   = _prepare_and_measure(bit, send_basis, eve_basis, self._simulator)
                 bit, send_basis = eve_bit, eve_basis
 
             outcome = _prepare_and_measure(bit, send_basis, bob_bases[i], self._simulator)
             bob_results.append(outcome)
 
-        # Basis sifting: keep only positions where Alice's and Bob's bases matched
-        sifted_alice = []
+        # Basis sifting
+        sifted_alice=[]
         sifted_bob = []
         for i in range(n_qubits):
             if alice_bases[i] == bob_bases[i]:
@@ -93,14 +85,15 @@ class BB84Protocol(QKDProtocol):
                 sifted_bob.append(bob_results[i])
 
         n_sifted = len(sifted_alice)
-        qber = self._estimate_qber(sifted_alice, sifted_bob)
+        qber= self._estimate_qber(sifted_alice, sifted_bob)
 
         return QKDResult(
-            sifted_key=sifted_alice,  # final key material (post-sample-removal happens upstream if desired)
+            sifted_key=sifted_alice,
             qber=qber,
             n_qubits_sent=n_qubits,
             n_sifted=n_sifted,
-            eavesdropper_active=eavesdropper_active,
+            intercept_probability=intercept_probability,
+            eavesdropper_active=intercept_probability > 0.0,
             metadata={"sample_fraction": self._sample_fraction},
         )
 

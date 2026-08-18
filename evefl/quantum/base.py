@@ -21,9 +21,9 @@ class QKDResult:
     qber: float                    # estimated quantum bit error rate, 0.0-1.0
     n_qubits_sent: int
     n_sifted: int                  # number of bits surviving basis sifting
-    eavesdropper_active: bool      # ground truth flag, useful for testing/simulation logs
-    metadata: dict = field(default_factory=dict)
-
+    intercept_probability: float      # ground truth flag: fraction of qubits intercepted by Eve (0.0-1.0)
+    eavesdropper_active: bool      # convenience flag: true if intercept_probability > 0.0, false otherwise
+    metadata: dict = field(default_factory=dict)  # any extra info the protocol wants to
 
 class QKDProtocol(ABC):
     """
@@ -35,12 +35,13 @@ class QKDProtocol(ABC):
     """
 
     @abstractmethod
-    def run_exchange(self, n_qubits: int, eavesdropper_active: bool = False) -> QKDResult:
+    def run_exchange(self, n_qubits: int, intercept_probability: float = 0.0) -> QKDResult:
         """
         Simulate (or perform) one full QKD exchange and return the result.
 
         Args:
             n_qubits: number of qubits to send before sifting.
+            intercept_probability: fraction of qubits intercepted by Eve (0.0-1.0).
             eavesdropper_active: whether to simulate an intercept-resend
                 (or other) eavesdropping attack on this exchange.
 

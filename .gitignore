@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data (never commit ChestX-ray14 or any large dataset)
+data/
+*.dcm
+*.png
+*.jpg
+*.jpeg
+!docs/**/*.png
+
+# Model checkpoints
+*.pt
+*.pth
+*.ckpt
+
+# Secrets / env
+.env
+*.pem
+*.key
+
+# W&B
+wandb/
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Docker
+*.log

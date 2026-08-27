@@ -1,0 +1,27 @@
+# EveFL configuration
+# Centralizing thresholds/backends here means swapping algorithms or
+# retuning the state machine doesn't require touching Python code.
+
+quantum:
+  active_protocol: bb84
+  n_qubits_per_round: 512
+  sample_fraction: 0.25   # fraction of sifted key used for QBER estimation
+
+crypto:
+  active_suite: classical   # switch to "pq_kyber" once stretch goal is implemented
+  derived_key_length_bytes: 32
+
+orchestration:
+  thresholds:
+    secure_max: 0.05     # QBER < 5%  -> SECURE
+    caution_max: 0.11    # 5% <= QBER < 11% -> CAUTION
+                          # QBER >= 11% -> LOCKDOWN
+
+fl:
+  local_epochs: 5
+  model: resnet18
+  dataset: chestxray14
+
+tracking:
+  wandb_project: evefl
+  wandb_entity: null   # set your W&B username/team here

@@ -1,0 +1,23 @@
+# --- Phase 1: Quantum simulation ---
+qiskit==1.2.4
+qiskit-aer==0.15.1
+
+# --- Phase 2: Cryptography ---
+cryptography==43.0.3
+
+# --- Config ---
+PyYAML==6.0.2
+
+# --- Testing ---
+pytest==8.3.3
+
+# --- Phase 4+ (uncomment when you get there) ---
+# flwr==1.11.1
+# torch==2.5.1
+# torchvision==0.20.1
+# streamlit==1.39.0
+# wandb==0.18.5
+
+# --- Stretch goal: post-quantum crypto ---
+# liboqs-python
+tenseal==0.3.17

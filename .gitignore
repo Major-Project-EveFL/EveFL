@@ -43,3 +43,6 @@ wandb/
 
 # Docker
 *.log
+
+.venv312/
+results/

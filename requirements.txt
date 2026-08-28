@@ -3,7 +3,7 @@ qiskit==1.2.4
 qiskit-aer==0.15.1
 
 # --- Phase 2: Cryptography ---
-cryptography==43.0.3
+cryptography==42.0.8
 
 # --- Config ---
 PyYAML==6.0.2
@@ -11,13 +11,11 @@ PyYAML==6.0.2
 # --- Testing ---
 pytest==8.3.3
 
-# --- Phase 4+ (uncomment when you get there) ---
-# flwr==1.11.1
-# torch==2.5.1
-# torchvision==0.20.1
-# streamlit==1.39.0
-# wandb==0.18.5
+flwr==1.11.1
+torch==2.5.1
+torchvision==0.20.1
+streamlit==1.39.0
 
 # --- Stretch goal: post-quantum crypto ---
-# liboqs-python
+liboqs-python
 tenseal==0.3.17

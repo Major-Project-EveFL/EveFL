@@ -76,14 +76,14 @@ aggregate_fit()
 | 1 | BB84 QKD simulation (Qiskit) + configurable Eve alpha | ✅ Done |
 | 2 | Crypto stack (SHA-256 / HKDF / AES-256-GCM) | ✅ Done |
 | 3 | Three-state QBER controller | ✅ Done |
-| 4 | Flower FL integration | 🔄 In progress |
+| 4 | Flower FL integration | ✅ Done |
 | 4a | ResNet-18 model (`fl/model.py`) | ✅ Done |
 | 4b | ChestX-ray14 dataset + Dirichlet partitioner (`fl/dataset.py`) | ✅ Done |
 | 4c | QBER-aware Strategy (`fl/strategy.py`) | ✅ Done |
-| 4d | Flower client (`fl/client.py`) | ⏳ Upcoming |
-| 4e | Server entry point (`fl/server.py`) | ⏳ Upcoming |
-| 5 | Streamlit dashboard + W&B tracking | ⏳ Not started |
-| 6 | Docker packaging | ⏳ Not started |
+| 4d | Flower client (`fl/client.py`) | ✅ Done |
+| 4e | Server entry point (`fl/server.py`) | ✅ Done |
+| 5 | Streamlit dashboard + W&B tracking | 🔄 In progress |
+| 6 | Docker packaging | 🔄 In progress |
 | Stretch | Post-quantum fallback (CRYSTALS-Kyber) | ⏳ Not started |
 
 ---

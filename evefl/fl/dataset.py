@@ -41,6 +41,7 @@ log = logging.getLogger(__name__)
 # Fraction of the full dataset held out as a shared IID test set
 TEST_FRACTION = 0.10
 N_HOSPITALS   = 3
+DEFAULT_BATCH_SIZE = 32
 
 
 # ---------------------------------------------------------------------------
@@ -352,4 +353,5 @@ get_hospital_dataloader() / get_test_dataloader() — fast DataLoader factories 
 What it depends on:
 evefl/fl/model.py — imports CHESTXRAY_LABELS, NUM_CLASSES, get_train_transform(), get_eval_transform().
 pandas, numpy, PIL, torch, torchvision (already in requirements).
-Disk structure: <data_root>/images/ + Data_Entry_2017.csv'''
+Disk structure: <data_root>/images/ + Data_Entry_2017.csv
+default label size=32(updated)'''

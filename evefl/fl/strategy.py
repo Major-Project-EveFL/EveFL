@@ -155,7 +155,7 @@ class EveFLStrategy(fl.server.strategy.Strategy):
 
         for client in clients:
             # Deterministic but distinct seed per client per round
-            seed = server_round * 10_000 + int(client.cid)
+            seed = server_round * 10_000 + hash(client.cid) % 10_000
             bb84 = BB84Protocol(seed=seed)
 
             result: QKDResult = bb84.run_exchange(
@@ -435,21 +435,3 @@ class EveFLStrategy(fl.server.strategy.Strategy):
             num_clients=sample_size,
             min_num_clients=self._min_available_clients,
         )
-
-'''What this file does:
-EveFLStrategy — inherits from fl.server.strategy.Strategy (Flower 1.11.1 API).
-configure_fit() — runs independent BB84 per client with deterministic seeds, computes q_max, calls StateController, injects state + proximal_mu into each client's FitIns.
-aggregate_fit() — dispatches to the correct rule:
-SECURE → standard FedAvg by example count
-CAUTION → FedAvg + L2-norm anomaly scoring; suspicious clients downweighted to 0.05
-LOCKDOWN → discards all updates, returns _last_good_parameters unchanged
-configure_evaluate() / aggregate_evaluate() — pass-through evaluation.
-round_logs — accumulates per-round security records for JSON export.
-What it depends on:
-evefl/quantum/bb84.py — BB84Protocol.run_exchange(n_qubits, intercept_probability=...)
-evefl/orchestration/state_machine.py — StateController, SecurityState, StateThresholds
-flwr==1.11.1 — Strategy, FitIns, FitRes, Parameters, ndarrays_to_parameters, etc.
-Key fixes vs. broken repo version:
-Uses correct parameter name intercept_probability (not eve_intercept_rate) to match bb84.py
-No merge conflict markers
-Clean single-class implementation'''

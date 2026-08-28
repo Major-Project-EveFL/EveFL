@@ -311,13 +311,13 @@ def get_hospital_dataloader(
     dataset   = ChestXray14Dataset(data_root, indices=indices, transform=transform)
 
     return DataLoader(
-        dataset,
-        batch_size=batch_size,
-        shuffle=train,
-        num_workers=4,
-        pin_memory=torch.cuda.is_available(),
-        drop_last=train,   # keeps batch sizes consistent during training
-    )
+    dataset,
+    batch_size=batch_size,
+    shuffle=train,
+    num_workers=0,
+    pin_memory=torch.cuda.is_available(),
+    drop_last=train,
+)
 
 
 def get_test_dataloader(
@@ -341,7 +341,7 @@ def get_test_dataloader(
         dataset,
         batch_size=batch_size,
         shuffle=False,
-        num_workers=4,
+        num_workers=0,
         pin_memory=torch.cuda.is_available(),
     )
 

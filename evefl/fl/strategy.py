@@ -1,48 +1,51 @@
 """
-EveFL QBER-aware Flower strategy.
+EveFLStrategy: the piece that actually connects the quantum layer to
+federated aggregation.
 
-Phase 4 server-side orchestration:
+Every round, before any client trains anything:
 
-    per-client BB84
-            |
-            v
-        q_i(t)
-            |
-            v
-       q_max(t)
-            |
-            v
-    StateController
-            |
-     +------+------+
-     |      |      |
-  SECURE CAUTION LOCKDOWN
-     |      |      |
-   FedAvg FedProx  reject
-          + anomaly
-          weighting
+    1. Run one independent BB84 exchange per participating client
+       (evefl.quantum.bb84.BB84Protocol) — this simulates the QKD
+       handshake on that hospital's link to the server for this round.
+    2. Take system_qber = max(per-client QBER). A single compromised
+       link is the thing we care about catching, so we use the
+       worst-case reading rather than an average that a healthy
+       majority could dilute.
+    3. Classify system_qber via StateController -> SECURE / CAUTION / LOCKDOWN
+       (evefl.orchestration.state_machine).
+    4. Every client gets told the state and (if CAUTION) a FedProx mu,
+       via FitIns.config — the client itself doesn't decide any of this
+       (see client.py).
+    5. Aggregate according to that state:
+         SECURE   -> plain FedAvg
+         CAUTION  -> FedAvg with anomaly-downweighting (an update whose
+                     L2 norm is an outlier gets its weight halved, not
+                     zeroed — one hospital legitimately having more
+                     signal shouldn't be punished the same as a
+                     genuinely poisoned update)
+         LOCKDOWN -> discard the round entirely, keep the last known
+                     good parameters, flag `rekey_recommended`.
 
-This module intentionally does NOT perform local PyTorch training.
-Local training belongs in evefl/fl/client.py.
-QBER generation belongs in evefl/quantum/bb84.py.
-State classification belongs in evefl/orchestration/state_machine.py.
-
-Flower version target: flwr==1.11.1
+This class implements the real `flwr.server.strategy.Strategy` ABC.
+It is executed by the Ray-free sequential driver in runner.py — nothing
+in this file assumes or depends on Ray, gRPC, or Flower's simulation
+engine; it only needs a `ClientManager`-shaped object and
+`ClientProxy`-shaped objects, which is exactly what runner.py's
+`SequentialClientManager` / `LocalClientProxy` provide.
 """
 
 from __future__ import annotations
 
+import hashlib
 import logging
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
-import flwr as fl
 from flwr.common import (
     EvaluateIns,
     EvaluateRes,
     FitIns,
     FitRes,
-    NDArrays,
     Parameters,
     Scalar,
     ndarrays_to_parameters,
@@ -50,157 +53,158 @@ from flwr.common import (
 )
 from flwr.server.client_manager import ClientManager
 from flwr.server.client_proxy import ClientProxy
+from flwr.server.strategy import Strategy
 
-from evefl.orchestration.state_machine import (
-    SecurityState,
-    StateController,
-    StateThresholds,
-)
+from evefl.orchestration.state_machine import SecurityState, StateController, StateThresholds
 from evefl.quantum.bb84 import BB84Protocol
 from evefl.quantum.base import QKDResult
 
 log = logging.getLogger(__name__)
 
-# FedProx proximal coefficient sent to clients in CAUTION state
-_MU_CAUTION = 0.01
-_MU_SECURE  = 0.0
-
-# Weight floor for flagged suspicious clients in CAUTION state
-_SUSPICIOUS_WEIGHT_FLOOR = 0.05
-
-# Anomaly threshold: flag if L2 norm > mean + k * std
-_ANOMALY_K = 2.0
+DEFAULT_CAUTION_FEDPROX_MU = 0.01
+DEFAULT_ANOMALY_K = 2.0  # flag an update if ||update|| > mean + k*std
 
 
-class EveFLStrategy(fl.server.strategy.Strategy):
+def _stable_seed(server_round: int, cid: str) -> int:
     """
-    QBER-aware Flower strategy.
+    Deterministic seed for a (round, client) pair.
 
-    Args:
-        initial_parameters:  Starting model parameters (required by Flower).
-        intercept_probability: Alpha in [0,1] — Eve's per-photon intercept probability.
-                             0.0 = no Eve, 1.0 = full intercept-resend.
-        n_qubits:            Number of BB84 photons per client per round.
-        thresholds:          QBER thresholds for state transitions (default: 5%/11%).
-        fraction_fit:        Fraction of clients sampled per round (1.0 = all).
-        min_fit_clients:     Minimum clients required to start a round.
-        min_available_clients: Minimum clients that must be connected.
-        evaluate_fn:         Optional server-side evaluation function.
+    Python's builtin `hash()` on strings is randomized per process
+    (PYTHONHASHSEED) unless explicitly fixed, so seeding BB84 with
+    `hash(cid)` would silently give a different QBER trajectory on
+    every run even with the same experiment seed. SHA-256 is stable
+    across processes/interpreters, so the same (round, cid) always
+    gets the same BB84 draw.
     """
+    digest = hashlib.sha256(f"{server_round}:{cid}".encode("utf-8")).hexdigest()
+    return int(digest, 16) % 1_000_000
 
+
+def _flatten_norm(ndarrays: List[np.ndarray]) -> float:
+    """L2 norm of a client's update, flattened across all tensors."""
+    return float(np.sqrt(sum(np.sum(np.square(arr)) for arr in ndarrays)))
+
+
+class EveFLStrategy(Strategy):
     def __init__(
         self,
         initial_parameters: Parameters,
         *,
         intercept_probability: float = 0.0,
+        intercept_probability_schedule: Optional[Callable[[int], float]] = None,
         n_qubits: int = 1024,
-        thresholds: StateThresholds | None = None,
+        thresholds: Optional[StateThresholds] = None,
         fraction_fit: float = 1.0,
         min_fit_clients: int = 3,
         min_available_clients: int = 3,
-        evaluate_fn=None,
+        caution_fedprox_mu: float = DEFAULT_CAUTION_FEDPROX_MU,
+        anomaly_k: float = DEFAULT_ANOMALY_K,
+        evaluate_fn: Optional[Callable[[int, List[np.ndarray], dict],
+                                        Optional[Tuple[float, Dict[str, Scalar]]]]] = None,
     ):
+        """
+        intercept_probability: fixed Eve intercept-resend probability
+            used every round, unless `intercept_probability_schedule`
+            is given.
+        intercept_probability_schedule: optional callable
+            `server_round -> alpha in [0, 1]`, for experiments/demos
+            where Eve's activity changes over the run (quiet, then an
+            attack, then quiet again). Overrides `intercept_probability`
+            when provided.
+        evaluate_fn: optional centralized evaluation callback matching
+            `(server_round, ndarrays, config) -> Optional[(loss, metrics)]`
+            — see evaluation.py's `make_evaluate_fn()`.
+        """
         super().__init__()
         self._initial_parameters = initial_parameters
         self._intercept_probability = float(intercept_probability)
+        self._intercept_probability_schedule = intercept_probability_schedule
         self._n_qubits = int(n_qubits)
-        self._fraction_fit = float(fraction_fit)
-        self._min_fit_clients = int(min_fit_clients)
-        self._min_available_clients = int(min_available_clients)
+        self._state_controller = StateController(thresholds or StateThresholds())
+        self._fraction_fit = fraction_fit
+        self._min_fit_clients = min_fit_clients
+        self._min_available_clients = min_available_clients
+        self._caution_fedprox_mu = caution_fedprox_mu
+        self._anomaly_k = anomaly_k
         self._evaluate_fn = evaluate_fn
 
-        # Phase 3: state controller
-        self._controller = StateController(thresholds or StateThresholds())
+        # Last known good parameters — what LOCKDOWN rounds fall back to.
+        self._last_good_parameters = initial_parameters
 
-        # Phase 1: BB84 engine — re-created each round for independent key material
-        self._bb84 = BB84Protocol()
-
-        # Track current round state for aggregate_fit()
-        self._round_state: SecurityState = SecurityState.SECURE
-        self._round_qber_per_client: Dict[str, float] = {}
-
-        # Preserve the last good parameters for LOCKDOWN rounds
-        self._last_good_parameters: Parameters = initial_parameters
-
-        # Round log for dashboard / JSON export
+        # Per-round bookkeeping, exported by server.py to results JSON.
+        # This is the single source of truth for what happened each
+        # round (also read/patched by runner.py to attach eval results).
         self.round_logs: List[dict] = []
 
+        # Set during configure_fit(), read during aggregate_fit() for the
+        # SAME round — configure_fit always runs immediately before
+        # aggregate_fit for a given server_round in both the real Flower
+        # server and the sequential runner, so this is safe.
+        self._round_state: Optional[SecurityState] = None
+        self._round_system_qber: float = 0.0
+        self._round_intercept_probability: float = 0.0
+        self._round_qber_per_client: Dict[str, float] = {}
+
     # ------------------------------------------------------------------
-    # Flower required interface
+    # Strategy interface
     # ------------------------------------------------------------------
 
-    def initialize_parameters(
-        self,
-        client_manager: ClientManager,
-    ) -> Optional[Parameters]:
+    def initialize_parameters(self, client_manager: ClientManager) -> Optional[Parameters]:
         return self._initial_parameters
 
     def configure_fit(
-        self,
-        server_round: int,
-        parameters: Parameters,
-        client_manager: ClientManager,
+        self, server_round: int, parameters: Parameters, client_manager: ClientManager
     ) -> List[Tuple[ClientProxy, FitIns]]:
-        """
-        Called before every FL round.
-
-        Runs BB84 for each client, determines system state, and injects
-        the state configuration into FitIns so clients know which
-        training mode to use (mu=0 for SECURE, mu=0.01 for CAUTION).
-        """
         clients = self._sample_clients(client_manager)
 
-        # 1 — Run BB84 per client, collect QBER readings
-        qber_readings: Dict[str, float] = {}
+        # -- 1. Resolve this round's Eve intercept probability --------
+        if self._intercept_probability_schedule is not None:
+            alpha = float(self._intercept_probability_schedule(server_round))
+            if not 0.0 <= alpha <= 1.0:
+                raise ValueError(
+                    f"intercept_probability_schedule({server_round}) returned "
+                    f"{alpha}, outside [0, 1]."
+                )
+        else:
+            alpha = self._intercept_probability
+        self._round_intercept_probability = alpha
 
+        # -- 2. One BB84 exchange per client, this round ---------------
+        qber_per_client: Dict[str, float] = {}
         for client in clients:
-            # Deterministic but distinct seed per client per round
-            seed = server_round * 10_000 + hash(client.cid) % 10_000
+            seed = _stable_seed(server_round, client.cid)
             bb84 = BB84Protocol(seed=seed)
+            result: QKDResult = bb84.run_exchange(n_qubits=self._n_qubits, intercept_probability=alpha)
+            qber_per_client[client.cid] = result.qber
 
-            result: QKDResult = bb84.run_exchange(
-                n_qubits=self._n_qubits,
-                intercept_probability=self._intercept_probability,
+        system_qber = max(qber_per_client.values()) if qber_per_client else 0.0
+
+        # -- 3. Classify -------------------------------------------------
+        transition = self._state_controller.update(system_qber)
+        state = transition.new_state
+
+        self._round_state = state
+        self._round_system_qber = system_qber
+        self._round_qber_per_client = qber_per_client
+
+        if transition.changed:
+            log.warning(
+                "[Round %d] Security state change: %s -> %s (system QBER=%.4f)",
+                server_round, transition.previous_state, state.value, system_qber,
             )
-            cid = client.cid
-            qber_readings[cid] = result.qber
-            log.debug(
-                "[Round %d] Client %s QBER=%.4f",
-                server_round, cid, result.qber,
-            )
+        else:
+            log.info("[Round %d] State=%s system_qber=%.4f", server_round, state.value, system_qber)
 
-        # 2 — System-level QBER = max across all clients
-        system_qber = max(qber_readings.values()) if qber_readings else 0.0
-        transition = self._controller.update(system_qber)
-        self._round_state = transition.new_state
-        self._round_qber_per_client = qber_readings
-
-        log.info(
-            "[Round %d] system_qber=%.4f  state=%s%s",
-            server_round,
-            system_qber,
-            self._round_state.value,
-            "  *** STATE CHANGE ***" if transition.changed else "",
-        )
-
-        # 3 — Build per-client FitIns with state config
-        mu = _MU_CAUTION if self._round_state == SecurityState.CAUTION else _MU_SECURE
-
-        fit_configurations = []
-        for client in clients:
-            config: Dict[str, Scalar] = {
-                "server_round":   server_round,
-                "state":          self._round_state.value,
-                "proximal_mu":    mu,
-                "local_epochs":   5,
-                "round_id":       server_round,
-                "client_id":      client.cid,
-                "qber":           qber_readings[client.cid],
-                "q_max":          system_qber,
-            }
-            fit_configurations.append((client, FitIns(parameters, config)))
-
-        return fit_configurations
+        # -- 4. Build per-client FitIns -----------------------------------
+        fedprox_mu = self._caution_fedprox_mu if state == SecurityState.CAUTION else 0.0
+        config: Dict[str, Scalar] = {
+            "state": state.value,
+            "qber": system_qber,
+            "fedprox_mu": fedprox_mu,
+            "server_round": server_round,
+        }
+        fit_ins = FitIns(parameters, config)
+        return [(client, fit_ins) for client in clients]
 
     def aggregate_fit(
         self,
@@ -208,189 +212,92 @@ class EveFLStrategy(fl.server.strategy.Strategy):
         results: List[Tuple[ClientProxy, FitRes]],
         failures: List[Union[Tuple[ClientProxy, FitRes], BaseException]],
     ) -> Tuple[Optional[Parameters], Dict[str, Scalar]]:
-        """
-        Aggregate client updates based on the state set in configure_fit().
+        state = self._round_state or SecurityState.SECURE
+        system_qber = self._round_system_qber
 
-        SECURE   → weighted FedAvg (standard)
-        CAUTION  → weighted FedAvg with gradient-norm anomaly scoring
-        LOCKDOWN → discard all updates, return last good parameters
-        """
-        state = self._round_state
-
-        # Log round outcome
-        system_qber = max(self._round_qber_per_client.values(), default=0.0)
         round_log = {
-            "round":       server_round,
-            "state":       state.value,
+            "round": server_round,
+            "state": state.value,
             "system_qber": system_qber,
+            "intercept_probability": self._round_intercept_probability,
             "qber_per_client": dict(self._round_qber_per_client),
-            "n_results":   len(results),
-            "n_failures":  len(failures),
+            "n_results": len(results),
+            "n_failures": len(failures),
         }
 
+        # ---- LOCKDOWN: never aggregate. Keep last good params. --------
         if state == SecurityState.LOCKDOWN:
-            log.warning(
-                "[Round %d] LOCKDOWN — discarding all %d updates.",
-                server_round, len(results),
-            )
-            round_log["aggregation"] = "lockdown_skipped"
+            round_log.update({
+                "aggregation": "lockdown_discarded",
+                "rekey_recommended": True,
+            })
             self.round_logs.append(round_log)
-            metrics: Dict[str, Scalar] = {
-                "state": state.value,
-                "qber": system_qber,
-                "skipped": 1,
-            }
-            # Return last good model; round counter still advances in Flower
-            return self._last_good_parameters, metrics
+            log.warning("[Round %d] LOCKDOWN — round discarded, keeping last known good parameters.",
+                        server_round)
+            return self._last_good_parameters, round_log
 
         if not results:
-            log.warning("[Round %d] No results to aggregate.", server_round)
-            round_log["aggregation"] = "no_results"
+            round_log.update({"aggregation": "no_results", "rekey_recommended": False})
             self.round_logs.append(round_log)
-            return None, {}
+            return self._last_good_parameters, round_log
 
+        # ---- Extract client updates -------------------------------------
+        client_ndarrays = [parameters_to_ndarrays(fit_res.parameters) for _, fit_res in results]
+        num_examples = [fit_res.num_examples for _, fit_res in results]
+        cids = [proxy.cid for proxy, _ in results]
+
+        if sum(num_examples) == 0:
+            # Every client returned num_examples=0 (e.g. all skipped
+            # training for some reason) — nothing usable to aggregate.
+            round_log.update({"aggregation": "no_examples", "rekey_recommended": False})
+            self.round_logs.append(round_log)
+            return self._last_good_parameters, round_log
+
+        weights = np.array(num_examples, dtype=np.float64)
+
+        anomalous_cids: List[str] = []
         if state == SecurityState.CAUTION:
-            aggregated, agg_metrics = self._caution_aggregate(results, server_round)
-            round_log["aggregation"] = "fedprox+anomaly"
-        else:
-            aggregated, agg_metrics = self._secure_aggregate(results, server_round)
-            round_log["aggregation"] = "fedavg"
+            norms = np.array([_flatten_norm(nd) for nd in client_ndarrays])
+            if len(norms) > 1 and norms.std() > 0:
+                mean, std = norms.mean(), norms.std()
+                threshold = mean + self._anomaly_k * std
+                for i, norm in enumerate(norms):
+                    if norm > threshold:
+                        weights[i] *= 0.5  # downweight, don't zero — could be legitimate signal
+                        anomalous_cids.append(cids[i])
+                if anomalous_cids:
+                    log.warning("[Round %d] CAUTION anomaly downweighted client(s): %s",
+                                server_round, anomalous_cids)
 
-        agg_metrics["state"] = state.value
-        agg_metrics["qber"] = system_qber
+        weights = weights / weights.sum()
 
-        if aggregated is not None:
-            self._last_good_parameters = aggregated
+        n_tensors = len(client_ndarrays[0])
+        aggregated: List[np.ndarray] = []
+        for tensor_i in range(n_tensors):
+            stacked = np.stack([client_ndarrays[c][tensor_i] for c in range(len(client_ndarrays))])
+            weighted = np.tensordot(weights, stacked, axes=1).astype(stacked.dtype)
+            aggregated.append(weighted)
 
-        round_log["metrics"] = agg_metrics
+        aggregated_parameters = ndarrays_to_parameters(aggregated)
+        self._last_good_parameters = aggregated_parameters
+
+        round_log.update({
+            "aggregation": "fedavg" if state == SecurityState.SECURE else "fedprox_anomaly_weighted",
+            "anomalous_clients": anomalous_cids,
+            "rekey_recommended": False,
+        })
         self.round_logs.append(round_log)
-        return aggregated, agg_metrics
 
-    # ------------------------------------------------------------------
-    # Aggregation rules
-    # ------------------------------------------------------------------
-
-    def _secure_aggregate(
-        self,
-        results: List[Tuple[ClientProxy, FitRes]],
-        server_round: int,
-    ) -> Tuple[Optional[Parameters], Dict[str, Scalar]]:
-        """Standard FedAvg — weighted average by number of training examples."""
-        total_examples = sum(fit_res.num_examples for _, fit_res in results)
-        if total_examples == 0:
-            return None, {}
-
-        weighted_arrays: Optional[NDArrays] = None
-        for _, fit_res in results:
-            weight = fit_res.num_examples / total_examples
-            client_nda = parameters_to_ndarrays(fit_res.parameters)
-            if weighted_arrays is None:
-                weighted_arrays = [arr * weight for arr in client_nda]
-            else:
-                for j, arr in enumerate(client_nda):
-                    weighted_arrays[j] += arr * weight
-
-        log.info(
-            "[Round %d] SECURE FedAvg over %d clients (%d examples).",
-            server_round, len(results), total_examples,
-        )
-        return ndarrays_to_parameters(weighted_arrays), {"n_clients": len(results)}
-
-    def _caution_aggregate(
-        self,
-        results: List[Tuple[ClientProxy, FitRes]],
-        server_round: int,
-    ) -> Tuple[Optional[Parameters], Dict[str, Scalar]]:
-        """
-        FedAvg with gradient-norm anomaly scoring.
-
-        Clients flagged as suspicious (||W|| > mean + 2σ) receive a
-        reduced aggregation weight of 0.05 regardless of dataset size.
-        Non-flagged clients share the remaining weight proportionally.
-
-        Note: clients already trained with proximal_mu=0.01 (FedProx)
-        because configure_fit() injected that into their FitIns config.
-        """
-        # Compute L2 norm of each client's full parameter vector
-        client_data: List[Tuple[ClientProxy, FitRes, NDArrays, float]] = []
-        for proxy, fit_res in results:
-            nda = parameters_to_ndarrays(fit_res.parameters)
-            norm = float(np.sqrt(sum(np.sum(a ** 2) for a in nda)))
-            client_data.append((proxy, fit_res, nda, norm))
-
-        norms = np.array([norm for *_, norm in client_data])
-        mean_norm = float(norms.mean())
-        std_norm = float(norms.std()) if len(norms) > 1 else 0.0
-
-        threshold = mean_norm + _ANOMALY_K * std_norm
-        suspicious_cids: List[str] = []
-
-        # Assign weights
-        weights: Dict[str, float] = {}
-        total_examples = sum(fit_res.num_examples for _, fit_res, _, _ in client_data)
-
-        for proxy, fit_res, _, norm in client_data:
-            cid = proxy.cid
-            if norm > threshold:
-                weights[cid] = _SUSPICIOUS_WEIGHT_FLOOR
-                suspicious_cids.append(cid)
-            else:
-                weights[cid] = fit_res.num_examples / total_examples if total_examples > 0 else 0.0
-
-        # Renormalize: non-suspicious clients share 1 - sum(floor weights)
-        total_suspicious_weight = len(suspicious_cids) * _SUSPICIOUS_WEIGHT_FLOOR
-        remaining_weight = 1.0 - total_suspicious_weight
-        total_clean_examples = sum(
-            fit_res.num_examples
-            for proxy, fit_res, _, _ in client_data
-            if proxy.cid not in suspicious_cids
-        )
-        for proxy, fit_res, _, _ in client_data:
-            cid = proxy.cid
-            if cid not in suspicious_cids and total_clean_examples > 0:
-                weights[cid] = (fit_res.num_examples / total_clean_examples) * remaining_weight
-
-        if suspicious_cids:
-            log.warning(
-                "[Round %d] CAUTION: %d suspicious client(s): %s  (threshold norm=%.4f)",
-                server_round, len(suspicious_cids), suspicious_cids, threshold,
-            )
-
-        # Weighted aggregation
-        weighted_arrays: Optional[NDArrays] = None
-        for proxy, _, nda, _ in client_data:
-            w = weights[proxy.cid]
-            if weighted_arrays is None:
-                weighted_arrays = [arr * w for arr in nda]
-            else:
-                for j, arr in enumerate(nda):
-                    weighted_arrays[j] += arr * w
-
-        metrics: Dict[str, Scalar] = {
-            "n_clients": len(results),
-            "n_suspicious": len(suspicious_cids),
-            "mean_grad_norm": mean_norm,
-            "anomaly_threshold": threshold,
-        }
-        log.info(
-            "[Round %d] CAUTION aggregation: %d/%d clients clean.",
-            server_round, len(results) - len(suspicious_cids), len(results),
-        )
-        return ndarrays_to_parameters(weighted_arrays), metrics
-
-    # ------------------------------------------------------------------
-    # Evaluate (pass-through; server-side eval optional)
-    # ------------------------------------------------------------------
+        return aggregated_parameters, round_log
 
     def configure_evaluate(
-        self,
-        server_round: int,
-        parameters: Parameters,
-        client_manager: ClientManager,
+        self, server_round: int, parameters: Parameters, client_manager: ClientManager
     ) -> List[Tuple[ClientProxy, EvaluateIns]]:
+        if self._round_state == SecurityState.LOCKDOWN:
+            return []  # don't bother round-tripping to clients on a discarded round
         clients = self._sample_clients(client_manager)
-        config = {"server_round": server_round}
-        return [(c, EvaluateIns(parameters, config)) for c in clients]
+        eval_ins = EvaluateIns(parameters, {"server_round": server_round})
+        return [(client, eval_ins) for client in clients]
 
     def aggregate_evaluate(
         self,
@@ -400,38 +307,24 @@ class EveFLStrategy(fl.server.strategy.Strategy):
     ) -> Tuple[Optional[float], Dict[str, Scalar]]:
         if not results:
             return None, {}
-        # Weighted average of loss
         total_examples = sum(r.num_examples for _, r in results)
         if total_examples == 0:
             return None, {}
-        loss = sum(r.loss * r.num_examples for _, r in results) / total_examples
-        metrics = {
-            "auc_roc": float(
-                np.mean([r.metrics.get("auc_roc", 0.0) for _, r in results])
-            )
-        }
-        return loss, metrics
+        weighted_loss = sum(r.loss * r.num_examples for _, r in results) / total_examples
+        return weighted_loss, {"n_clients_evaluated": len(results)}
 
     def evaluate(
-        self,
-        server_round: int,
-        parameters: Parameters,
+        self, server_round: int, parameters: Parameters
     ) -> Optional[Tuple[float, Dict[str, Scalar]]]:
         if self._evaluate_fn is None:
             return None
-        return self._evaluate_fn(server_round, parameters_to_ndarrays(parameters), {})
+        ndarrays = parameters_to_ndarrays(parameters)
+        return self._evaluate_fn(server_round, ndarrays, {})
 
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
 
     def _sample_clients(self, client_manager: ClientManager) -> List[ClientProxy]:
-        """Sample clients for this round."""
-        sample_size = max(
-            self._min_fit_clients,
-            int(client_manager.num_available() * self._fraction_fit),
-        )
-        return client_manager.sample(
-            num_clients=sample_size,
-            min_num_clients=self._min_available_clients,
-        )
+        sample_size = max(self._min_fit_clients, int(client_manager.num_available() * self._fraction_fit))
+        return client_manager.sample(num_clients=sample_size, min_num_clients=self._min_available_clients)

@@ -1,12 +1,12 @@
 """
-ResNet-18 model for NIH ChestX-ray14 multi-label classification.
+ResNet-18 for NIH ChestX-ray14 multi-label classification.
 
-Important: nothing quantum happens here. This is a standard PyTorch
-model. The quantum layer (BB84 / QBER) runs on the *communication
-channel* — it monitors the encryption key exchange between clients and
-the server. The X-ray images never leave their hospital; only model
-gradients are transmitted, and QBER tells us whether those transmissions
-are being intercepted.
+Nothing quantum happens in this file. The quantum layer (BB84 / QBER,
+see evefl/quantum/) monitors the communication channel that gradients
+travel over between clients and the server — it never touches image
+data. X-ray images never leave their hospital; only model parameters
+are exchanged, and QBER tells the orchestration layer (strategy.py)
+whether that exchange looks like it's being intercepted.
 """
 
 from __future__ import annotations
@@ -16,42 +16,36 @@ import torch.nn as nn
 from torchvision import models, transforms
 from torchvision.models import ResNet18_Weights
 
-# NIH ChestX-ray14 pathology labels (order matches the one-hot encoding)
+# NIH ChestX-ray14 pathology labels, in the fixed order used for the
+# one-hot / multi-hot label matrix everywhere in evefl.fl.
 CHESTXRAY_LABELS: list[str] = [
-    "Atelectasis", "Cardiomegaly", "Effusion",     "Infiltration",
-    "Mass",        "Nodule",       "Pneumonia",     "Pneumothorax",
-    "Consolidation","Edema",       "Emphysema",     "Fibrosis",
-    "Pleural_Thickening",          "Hernia",
+    "Atelectasis", "Cardiomegaly", "Effusion", "Infiltration",
+    "Mass", "Nodule", "Pneumonia", "Pneumothorax",
+    "Consolidation", "Edema", "Emphysema", "Fibrosis",
+    "Pleural_Thickening", "Hernia",
 ]
 NUM_CLASSES = len(CHESTXRAY_LABELS)  # 14
+
+IMAGENET_MEAN = [0.485, 0.456, 0.406]
+IMAGENET_STD = [0.229, 0.224, 0.225]
 
 
 def build_resnet18(pretrained: bool = True) -> nn.Module:
     """
-    ResNet-18 pretrained on ImageNet.
+    ResNet-18 with its final FC layer replaced by a 14-way linear head.
 
-    The final FC layer is replaced with a 14-output sigmoid head for
-    multi-label binary cross-entropy — one sigmoid per pathology.
-    Sigmoid is applied inside the model so outputs are always in [0,1]
-    and can be directly compared against binary targets.
+    Outputs are raw logits (no sigmoid applied in the model) so training
+    can use BCEWithLogitsLoss, which fuses sigmoid + log for numerical
+    stability. Apply torch.sigmoid(logits) at inference time.
     """
     weights = ResNet18_Weights.IMAGENET1K_V1 if pretrained else None
-    model   = models.resnet18(weights=weights)
-
-    in_features = model.fc.in_features          # 512 for ResNet-18
-    model.fc    = nn.Linear(in_features, NUM_CLASSES)
-    # Sigmoid applied separately so we can use BCEWithLogitsLoss during
-    # training (more numerically stable) and nn.Sigmoid() at inference
+    model = models.resnet18(weights=weights)
+    model.fc = nn.Linear(model.fc.in_features, NUM_CLASSES)
     return model
 
 
 def get_criterion() -> nn.Module:
-    """
-    Binary cross-entropy with logits.
-
-    More numerically stable than BCE + Sigmoid because it combines the
-    sigmoid and log in a single fused operation.
-    """
+    """Multi-label BCE-with-logits — one independent binary decision per pathology."""
     return nn.BCEWithLogitsLoss()
 
 
@@ -60,12 +54,10 @@ def get_train_transform() -> transforms.Compose:
         transforms.Resize(256),
         transforms.RandomCrop(224),
         transforms.RandomHorizontalFlip(),
-        # Greyscale X-rays are loaded as RGB by PIL (3 channels needed for ResNet)
         transforms.ToTensor(),
-        transforms.Normalize(
-            mean=[0.485, 0.456, 0.406],   # ImageNet stats
-            std =[0.229, 0.224, 0.225],
-        ),
+        # Chest X-rays are greyscale on disk but loaded as 3-channel RGB
+        # (PIL .convert("RGB")) since ResNet-18 expects 3 input channels.
+        transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
     ])
 
 
@@ -74,13 +66,9 @@ def get_eval_transform() -> transforms.Compose:
         transforms.Resize(256),
         transforms.CenterCrop(224),
         transforms.ToTensor(),
-        transforms.Normalize(
-            mean=[0.485, 0.456, 0.406],
-            std =[0.229, 0.224, 0.225],
-        ),
+        transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
     ])
 
 
 def get_device() -> torch.device:
-    """Pick GPU if available, otherwise CPU."""
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")

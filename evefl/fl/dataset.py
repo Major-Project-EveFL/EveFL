@@ -1,22 +1,20 @@
 """
-NIH ChestX-ray14 dataset loader and Dirichlet partitioning for EveFL.
+NIH ChestX-ray14 dataset loading and Dirichlet non-IID partitioning
+across simulated hospital clients.
 
-Run partition_and_save() ONCE before starting FL training to create the
-three non-IID hospital splits on disk. The FL training loop then loads
-pre-partitioned data, which is faster and keeps experiments reproducible.
-
-Dataset structure expected on disk:
+Expected layout on disk:
     <data_root>/
-        images/               # all .png files
-        Data_Entry_2017.csv   # official NIH metadata file
+        images/                # all .png files (NIH's flat layout, or
+                                # any nested layout — see __getitem__)
+        Data_Entry_2017.csv    # official NIH metadata file
 
-After partition_and_save():
+Run `partition_and_save()` ONCE before training. It writes:
     <partition_root>/
         hospital_0/indices.npy
         hospital_1/indices.npy
         hospital_2/indices.npy
-        test/indices.npy       # held-out IID test split (10% of total)
-        partition_meta.json    # metadata for reference
+        test/indices.npy           # held-out IID test split
+        partition_meta.json
 
 Nothing quantum here — this is standard PyTorch data loading.
 """
@@ -30,36 +28,34 @@ from typing import Optional
 
 import numpy as np
 import pandas as pd
-from PIL import Image
 import torch
+from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 
-from evefl.fl.model import CHESTXRAY_LABELS, NUM_CLASSES, get_train_transform, get_eval_transform
+from evefl.fl.model import CHESTXRAY_LABELS, NUM_CLASSES, get_eval_transform, get_train_transform
 
 log = logging.getLogger(__name__)
 
-# Fraction of the full dataset held out as a shared IID test set
 TEST_FRACTION = 0.10
-N_HOSPITALS   = 3
+N_HOSPITALS = 3
 DEFAULT_BATCH_SIZE = 32
 
 
 # ---------------------------------------------------------------------------
-# Dataset class
+# Dataset
 # ---------------------------------------------------------------------------
 
 class ChestXray14Dataset(Dataset):
     """
     PyTorch Dataset for NIH ChestX-ray14.
 
-    Loads images on demand from disk; labels are pre-loaded into memory
-    as a float32 tensor (shape: [N, 14]).
+    Labels are parsed once into an in-memory float32 tensor of shape
+    [N, 14]; images are loaded from disk on demand in __getitem__.
 
     Args:
-        data_root:  Path to the folder containing images/ and Data_Entry_2017.csv
-        indices:    Optional numpy array of row indices to use (for partitioned subsets).
-                    If None, the full dataset is used.
-        transform:  torchvision transform applied to each image.
+        data_root: folder containing images/ and Data_Entry_2017.csv
+        indices:   optional row-index subset (used for partitioned splits)
+        transform: torchvision transform; defaults to the training transform
     """
 
     def __init__(
@@ -74,54 +70,65 @@ class ChestXray14Dataset(Dataset):
         csv_path = self.data_root / "Data_Entry_2017.csv"
         if not csv_path.exists():
             raise FileNotFoundError(
-                f"Metadata CSV not found at {csv_path}. "
-                "Download ChestX-ray14 from https://nihcc.app.box.com/v/ChestXray-NIHCC"
+                f"Metadata CSV not found at {csv_path}. Download ChestX-ray14 "
+                "from https://nihcc.app.box.com/v/ChestXray-NIHCC (or use the "
+                "Kaggle-hosted copy)."
             )
 
         df = pd.read_csv(csv_path)
 
-        # Build binary label matrix — one column per pathology
         label_matrix = np.zeros((len(df), NUM_CLASSES), dtype=np.float32)
-        for i, finding_str in enumerate(df["Finding Labels"]):
-            for label in finding_str.split("|"):
+        for row_i, finding_str in enumerate(df["Finding Labels"]):
+            for label in str(finding_str).split("|"):
                 label = label.strip()
                 if label in CHESTXRAY_LABELS:
-                    label_matrix[i, CHESTXRAY_LABELS.index(label)] = 1.0
+                    label_matrix[row_i, CHESTXRAY_LABELS.index(label)] = 1.0
 
         self._image_names: np.ndarray = df["Image Index"].values
-        self._labels: torch.Tensor    = torch.from_numpy(label_matrix)
+        self._labels: torch.Tensor = torch.from_numpy(label_matrix)
 
-        # Apply index subset if provided
         if indices is not None:
             self._image_names = self._image_names[indices]
-            self._labels      = self._labels[indices]
+            self._labels = self._labels[indices]
+
+        self._image_index_cache: dict[str, Path] | None = None
 
     def __len__(self) -> int:
         return len(self._image_names)
 
-    def __getitem__(self, idx: int):
-        img_path = self.data_root / "images" / self._image_names[idx]
-        if not img_path.exists():
-            # Fallback: search recursively under data_root
-            matches = list(self.data_root.rglob(self._image_names[idx]))
-            if matches:
-                img_path = matches[0]
-            else:
-                raise FileNotFoundError(f"Image not found: {img_path}")
+    def _resolve_image_path(self, image_name: str) -> Path:
+        direct = self.data_root / "images" / image_name
+        if direct.exists():
+            return direct
 
-        image = Image.open(img_path).convert("RGB")   # X-rays are greyscale but ResNet needs 3ch
+        # NIH's Kaggle mirror sometimes ships as images_001/images, ...,
+        # images_012/images rather than one flat images/ folder. Build a
+        # name->path index once (lazily) instead of rglob-ing per image.
+        if self._image_index_cache is None:
+            log.info("Building image path index under %s (first lookup miss)...", self.data_root)
+            self._image_index_cache = {p.name: p for p in self.data_root.rglob("*.png")}
+
+        if image_name in self._image_index_cache:
+            return self._image_index_cache[image_name]
+
+        raise FileNotFoundError(f"Image not found anywhere under {self.data_root}: {image_name}")
+
+    def __getitem__(self, idx: int):
+        image_name = self._image_names[idx]
+        img_path = self._resolve_image_path(image_name)
+        image = Image.open(img_path).convert("RGB")
         if self.transform:
             image = self.transform(image)
         return image, self._labels[idx]
 
     @property
     def labels(self) -> torch.Tensor:
-        """Full label matrix, useful for computing class statistics."""
+        """Full label matrix — used by the partitioner for class statistics."""
         return self._labels
 
 
 # ---------------------------------------------------------------------------
-# Dirichlet partitioning
+# Dirichlet non-IID partitioning
 # ---------------------------------------------------------------------------
 
 def _dirichlet_partition(
@@ -131,26 +138,17 @@ def _dirichlet_partition(
     rng: np.random.Generator,
 ) -> list[list[int]]:
     """
-    Partition dataset sample indices across n_clients using Dir(alpha).
+    Partition sample indices across n_clients using a class-wise Dir(alpha).
 
-    Strategy: for each of the 14 pathology classes, distribute the positive
-    samples across clients using Dir(alpha) proportions. Non-positive samples
-    (No Finding) are distributed uniformly. This creates heterogeneous
-    class distributions — lower alpha = more skewed, higher alpha = more IID.
-
-    alpha=0.5 gives the moderate non-IID setting used in the EveFL paper.
-
-    Args:
-        labels:    Binary label matrix, shape [N, num_classes].
-        n_clients: Number of client partitions.
-        alpha:     Dirichlet concentration parameter.
-        rng:       Numpy random generator (pass a seeded one for reproducibility).
-
-    Returns:
-        List of n_clients lists, each containing sample indices.
+    For each of the 14 pathology classes, positive samples are split
+    across clients with proportions drawn from Dir(alpha) — lower alpha
+    means more skewed (one hospital sees almost all Cardiomegaly cases,
+    say), higher alpha approaches IID. "No Finding" samples (no positive
+    label at all) are distributed uniformly since there's no class
+    signal to skew them by.
     """
-    n_samples  = labels.shape[0]
-    n_classes  = labels.shape[1]
+    n_samples = labels.shape[0]
+    n_classes = labels.shape[1]
     client_idx: list[set] = [set() for _ in range(n_clients)]
 
     for c in range(n_classes):
@@ -161,7 +159,6 @@ def _dirichlet_partition(
         rng.shuffle(positive_indices)
         proportions = rng.dirichlet(alpha * np.ones(n_clients))
 
-        # Convert proportions to integer counts, ensuring all samples assigned
         counts = (proportions * len(positive_indices)).astype(int)
         counts[-1] = len(positive_indices) - counts[:-1].sum()  # remainder to last client
 
@@ -172,19 +169,14 @@ def _dirichlet_partition(
                 client_idx[client_id].add(int(idx))
             start = end
 
-    # Any samples not yet assigned (no positive label = "No Finding") go uniformly
-    all_assigned = set().union(*client_idx)
-    unassigned   = [i for i in range(n_samples) if i not in all_assigned]
+    all_assigned = set().union(*client_idx) if client_idx else set()
+    unassigned = [i for i in range(n_samples) if i not in all_assigned]
     rng.shuffle(unassigned)
     for i, idx in enumerate(unassigned):
         client_idx[i % n_clients].add(idx)
 
     return [sorted(s) for s in client_idx]
 
-
-# ---------------------------------------------------------------------------
-# One-time setup: partition and save to disk
-# ---------------------------------------------------------------------------
 
 def partition_and_save(
     data_root: str | Path,
@@ -194,91 +186,78 @@ def partition_and_save(
     alpha: float = 0.5,
     test_fraction: float = TEST_FRACTION,
     seed: int = 42,
-    subset_fraction: float = 1.0,   # set to 0.15 for fast debug runs
+    subset_fraction: float = 1.0,
 ) -> None:
     """
-    Partition ChestX-ray14 into n_clients non-IID hospital splits + test set.
-
-    Run this ONCE before starting FL training. Results are saved as
-    .npy index files so training is reproducible and fast.
+    Partition ChestX-ray14 into n_clients non-IID hospital splits + a
+    shared IID test split, and write everything to disk as .npy index
+    files (fast, reproducible re-loading; run this once per experiment
+    config, not once per round).
 
     Args:
-        data_root:       Root folder containing images/ and Data_Entry_2017.csv
-        partition_root:  Where to write hospital_0/, hospital_1/, etc.
-        n_clients:       Number of hospital partitions (default 3).
-        alpha:           Dirichlet concentration (0.5 = moderate non-IID).
-        test_fraction:   Fraction held out as shared IID test set.
-        seed:            RNG seed for full reproducibility.
-        subset_fraction: Use only this fraction of the data (for debug runs).
-                         Set to 1.0 for full evaluation.
+        subset_fraction: use only this fraction of the full dataset —
+            e.g. 0.02-0.05 for a quick end-to-end smoke test on Kaggle,
+            1.0 for a full run.
     """
-    data_root      = Path(data_root)
+    data_root = Path(data_root)
     partition_root = Path(partition_root)
     partition_root.mkdir(parents=True, exist_ok=True)
 
     log.info("Loading ChestX-ray14 metadata from %s ...", data_root)
-    # Load labels only (no images needed for partitioning)
-    dummy = ChestXray14Dataset(data_root, transform=get_train_transform())
-    labels_np = dummy.labels.numpy()   # shape [N, 14]
-    n_total   = len(dummy)
+    labels_only = ChestXray14Dataset(data_root, transform=get_train_transform())
+    labels_np = labels_only.labels.numpy()
+    n_total = len(labels_only)
 
     rng = np.random.default_rng(seed)
     all_indices = np.arange(n_total)
     rng.shuffle(all_indices)
 
-    # Optional subset for debug runs
     if subset_fraction < 1.0:
-        n_keep      = int(n_total * subset_fraction)
+        n_keep = max(1, int(n_total * subset_fraction))
         all_indices = all_indices[:n_keep]
-        log.info("Debug mode: using %.0f%% of data (%d/%d samples).",
-                 subset_fraction * 100, n_keep, n_total)
+        log.info("Subset mode: using %.1f%% of data (%d/%d samples).",
+                  subset_fraction * 100, n_keep, n_total)
 
-    # Carve out IID test set first
-    n_test          = int(len(all_indices) * test_fraction)
-    test_indices    = all_indices[:n_test]
-    trainval_idx    = all_indices[n_test:]
+    n_test = int(len(all_indices) * test_fraction)
+    test_indices = all_indices[:n_test]
+    trainval_idx = all_indices[n_test:]
 
-    log.info("Test set: %d samples. Partitioning %d samples across %d hospitals ...",
-             n_test, len(trainval_idx), n_clients)
+    log.info("Test set: %d samples. Partitioning %d samples across %d hospitals (alpha=%.2f)...",
+              n_test, len(trainval_idx), n_clients, alpha)
 
-    # Dirichlet partition of the training pool
     trainval_labels = labels_np[trainval_idx]
     client_local_idx = _dirichlet_partition(trainval_labels, n_clients, alpha, rng)
-
-    # Map local positions back to global dataset indices
     client_global_idx = [trainval_idx[local] for local in client_local_idx]
 
-    # Save
     for client_id, idx_array in enumerate(client_global_idx):
         out_dir = partition_root / f"hospital_{client_id}"
         out_dir.mkdir(exist_ok=True)
         np.save(out_dir / "indices.npy", np.array(idx_array))
-        log.info("Hospital %d: %d samples saved to %s", client_id, len(idx_array), out_dir)
+        log.info("Hospital %d: %d samples -> %s", client_id, len(idx_array), out_dir)
 
     test_dir = partition_root / "test"
     test_dir.mkdir(exist_ok=True)
     np.save(test_dir / "indices.npy", test_indices)
-    log.info("Test set: %d samples saved to %s", len(test_indices), test_dir)
+    log.info("Test set: %d samples -> %s", len(test_indices), test_dir)
 
-    # Save partition metadata for reference
     meta = {
-        "n_clients":       n_clients,
-        "alpha":           alpha,
-        "seed":            seed,
-        "test_fraction":   test_fraction,
+        "n_clients": n_clients,
+        "alpha": alpha,
+        "seed": seed,
+        "test_fraction": test_fraction,
         "subset_fraction": subset_fraction,
-        "n_total_used":    len(all_indices),
-        "n_test":          int(n_test),
-        "hospital_sizes":  [len(idx) for idx in client_global_idx],
+        "n_total_used": int(len(all_indices)),
+        "n_test": int(n_test),
+        "hospital_sizes": [len(idx) for idx in client_global_idx],
     }
     with open(partition_root / "partition_meta.json", "w") as f:
         json.dump(meta, f, indent=2)
 
-    log.info("Partitioning complete. Metadata saved to %s/partition_meta.json", partition_root)
+    log.info("Partitioning complete. Metadata: %s/partition_meta.json", partition_root)
 
 
 # ---------------------------------------------------------------------------
-# DataLoader factory (used by client.py)
+# DataLoader factories
 # ---------------------------------------------------------------------------
 
 def get_hospital_dataloader(
@@ -286,38 +265,28 @@ def get_hospital_dataloader(
     partition_root: str | Path,
     hospital_id: int,
     *,
-    batch_size: int = 32,
+    batch_size: int = DEFAULT_BATCH_SIZE,
     train: bool = True,
+    num_workers: int = 0,
 ) -> DataLoader:
-    """
-    Return a DataLoader for a specific hospital's partition.
-
-    Args:
-        data_root:      Root folder with images/ and metadata CSV.
-        partition_root: Where the .npy index files live.
-        hospital_id:    Integer 0, 1, or 2.
-        batch_size:     Batch size for training (32 matches the paper).
-        train:          If True, uses augmentation transforms; else eval transforms.
-    """
     idx_path = Path(partition_root) / f"hospital_{hospital_id}" / "indices.npy"
     if not idx_path.exists():
         raise FileNotFoundError(
-            f"Partition not found at {idx_path}. "
-            "Run dataset.partition_and_save() first."
+            f"Partition not found at {idx_path}. Run dataset.partition_and_save() first."
         )
 
-    indices   = np.load(idx_path)
+    indices = np.load(idx_path)
     transform = get_train_transform() if train else get_eval_transform()
-    dataset   = ChestXray14Dataset(data_root, indices=indices, transform=transform)
+    dataset = ChestXray14Dataset(data_root, indices=indices, transform=transform)
 
     return DataLoader(
-    dataset,
-    batch_size=batch_size,
-    shuffle=train,
-    num_workers=0,
-    pin_memory=torch.cuda.is_available(),
-    drop_last=train,
-)
+        dataset,
+        batch_size=batch_size,
+        shuffle=train,
+        num_workers=num_workers,
+        pin_memory=torch.cuda.is_available(),
+        drop_last=train and len(dataset) > batch_size,
+    )
 
 
 def get_test_dataloader(
@@ -325,33 +294,21 @@ def get_test_dataloader(
     partition_root: str | Path,
     *,
     batch_size: int = 64,
+    num_workers: int = 0,
 ) -> DataLoader:
-    """Return a DataLoader for the shared IID test set."""
     idx_path = Path(partition_root) / "test" / "indices.npy"
     if not idx_path.exists():
         raise FileNotFoundError(
-            f"Test partition not found at {idx_path}. "
-            "Run dataset.partition_and_save() first."
+            f"Test partition not found at {idx_path}. Run dataset.partition_and_save() first."
         )
 
-    indices  = np.load(idx_path)
-    dataset  = ChestXray14Dataset(data_root, indices=indices, transform=get_eval_transform())
+    indices = np.load(idx_path)
+    dataset = ChestXray14Dataset(data_root, indices=indices, transform=get_eval_transform())
 
     return DataLoader(
         dataset,
         batch_size=batch_size,
         shuffle=False,
-        num_workers=0,
+        num_workers=num_workers,
         pin_memory=torch.cuda.is_available(),
     )
-
-'''What this file does:
-ChestXray14Dataset — PyTorch Dataset that reads Data_Entry_2017.csv, builds a 14-label binary matrix, loads images on-demand from images/, and applies the transforms from model.py.
-_dirichlet_partition() — class-wise Dirichlet(α) partitioning. Positive samples per pathology are distributed across 3 clients; "No Finding" samples fill the remainder uniformly.
-partition_and_save() — one-time setup. Writes .npy index files per hospital + a shared test set + partition_meta.json.
-get_hospital_dataloader() / get_test_dataloader() — fast DataLoader factories that read the saved .npy indices.
-What it depends on:
-evefl/fl/model.py — imports CHESTXRAY_LABELS, NUM_CLASSES, get_train_transform(), get_eval_transform().
-pandas, numpy, PIL, torch, torchvision (already in requirements).
-Disk structure: <data_root>/images/ + Data_Entry_2017.csv
-default label size=32(updated)'''

@@ -17,6 +17,8 @@ flwr==1.11.1
 torch==2.5.1
 torchvision==0.20.1
 streamlit==1.39.0
+scikit-learn==1.5.2
+pandas==2.2.3
 
 # --- Stretch goal: post-quantum crypto ---
 # liboqs-python

@@ -1,385 +1,247 @@
 """
-EveFL Flower client.
+Flower client for one simulated hospital.
 
-Each federated client:
-    1. Loads its own hospital partition via get_hospital_dataloader()
-    2. Receives the current global model parameters from the server
-    3. Receives security configuration (state, proximal_mu) from the strategy
-    4. Performs local training with BCEWithLogitsLoss
-    5. Applies FedProx proximal term when server state is CAUTION
-    6. Returns updated parameters to Flower
+The client is deliberately "dumb" about security: it does local SGD
+training and, if told to (via `config["fedprox_mu"] > 0`), adds a
+FedProx proximal term. It does NOT decide whether an attack is
+happening — that's the server-side strategy's job (see strategy.py),
+based on that round's BB84 QBER. The client just obeys whatever
+`config["state"]` it's handed:
 
-The client does NOT decide the security state.
-The server/strategy decides it.
-The client only follows the policy received via FitIns config.
-
-Flower version target: flwr==1.11.1
+    SECURE   -> plain local SGD, `fedprox_mu` is 0
+    CAUTION  -> FedProx local SGD, `fedprox_mu` > 0 (keeps the local
+                model from drifting far from the last trusted global
+                model, since we're less sure this round's aggregate
+                will be trustworthy)
+    LOCKDOWN -> skip local training entirely, return the model
+                unchanged with num_examples=0, so this round can never
+                count toward the aggregate even if something upstream
+                forgot to check the state.
 """
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Tuple
 
-import flwr as fl
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.optim import Adam
+from flwr.client import Client, NumPyClient
+from flwr.common import Scalar
 
 from evefl.fl.dataset import get_hospital_dataloader
-from evefl.fl.model import build_resnet18, get_device, NUM_CLASSES
+from evefl.fl.model import build_resnet18, get_criterion, get_device
+from evefl.orchestration.state_machine import SecurityState
 
 log = logging.getLogger(__name__)
 
-DEFAULT_LOCAL_EPOCHS = 5
-DEFAULT_BATCH_SIZE = 32
+DEFAULT_LR = 1e-4
+DEFAULT_LOCAL_EPOCHS = 1
 
 
-# ============================================================================
-# Parameter conversion
-# ============================================================================
+# ---------------------------------------------------------------------------
+# Parameter <-> ndarray helpers
+# ---------------------------------------------------------------------------
 
 def get_model_parameters(model: nn.Module) -> List[np.ndarray]:
-    """
-    Extract model parameters as NumPy arrays.
-
-    Flower communicates model parameters rather than serializing the entire
-    PyTorch model. Order matches model.state_dict().
-    """
-    return [
-        value.detach().cpu().numpy().copy()
-        for _, value in model.state_dict().items()
-    ]
+    return [val.detach().cpu().numpy() for val in model.state_dict().values()]
 
 
 def set_model_parameters(model: nn.Module, parameters: List[np.ndarray]) -> None:
-    """
-    Load Flower parameters into a PyTorch model.
-    """
-    state_dict = model.state_dict()
-
-    if len(parameters) != len(state_dict):
+    state_dict_keys = list(model.state_dict().keys())
+    if len(parameters) != len(state_dict_keys):
         raise ValueError(
-            f"Parameter count mismatch. Model expects {len(state_dict)} tensors, "
-            f"but Flower supplied {len(parameters)}."
+            f"Parameter count mismatch: model has {len(state_dict_keys)} tensors, "
+            f"received {len(parameters)}."
         )
-
-    converted = {}
-    for (name, reference), parameter in zip(state_dict.items(), parameters):
-        array = np.asarray(parameter)
-        if tuple(array.shape) != tuple(reference.shape):
+    new_state = {}
+    for key, array, existing in zip(state_dict_keys, parameters, model.state_dict().values()):
+        tensor = torch.from_numpy(array)
+        if tensor.shape != existing.shape:
             raise ValueError(
-                f"Shape mismatch for '{name}': received {array.shape}, "
-                f"expected {tuple(reference.shape)}."
+                f"Shape mismatch for '{key}': model expects {tuple(existing.shape)}, "
+                f"received {tuple(tensor.shape)}."
             )
-        converted[name] = torch.tensor(array, dtype=reference.dtype)
-
-    model.load_state_dict(converted, strict=True)
-
-
-# ============================================================================
-# FedProx
-# ============================================================================
-
-def calculate_fedprox_term(model: nn.Module, global_parameters: List[np.ndarray]) -> torch.Tensor:
-    """
-    Calculate the FedProx proximal term: ||w - w_global||^2.
-
-    The mu multiplication is performed by the caller in the training loop.
-    """
-    device = next(model.parameters()).device
-    total = torch.zeros(1, device=device)
-
-    trainable_params = [p for p in model.parameters() if p.requires_grad]
-
-    if len(trainable_params) != len(global_parameters):
-        raise ValueError(
-            f"Trainable param count ({len(trainable_params)}) does not match "
-            f"global parameter list ({len(global_parameters)})."
-        )
-
-    for param, global_array in zip(trainable_params, global_parameters):
-        global_tensor = torch.tensor(global_array, dtype=param.dtype, device=device)
-        total = total + torch.sum((param - global_tensor) ** 2)
-
-    return total
+        new_state[key] = tensor
+    model.load_state_dict(new_state, strict=True)
 
 
-# ============================================================================
-# Flower client
-# ============================================================================
+def _fedprox_term(model: nn.Module, global_params: List[torch.Tensor], mu: float) -> torch.Tensor:
+    """(mu / 2) * ||local_params - global_params||^2 — pulls local
+    training back toward the last trusted global model."""
+    proximal = torch.tensor(0.0, device=next(model.parameters()).device)
+    for local_p, global_p in zip(model.parameters(), global_params):
+        proximal = proximal + torch.sum((local_p - global_p) ** 2)
+    return (mu / 2.0) * proximal
 
-class EveFLClient(fl.client.NumPyClient):
-    """
-    Flower NumPyClient for EveFL.
 
-    Same class used for all hospital clients.
-    Client-specific data is provided through the train_loader.
-    """
+# ---------------------------------------------------------------------------
+# Local training / evaluation loops
+# ---------------------------------------------------------------------------
+
+def _train_one_client(
+    model: nn.Module,
+    dataloader,
+    *,
+    device: torch.device,
+    epochs: int,
+    lr: float,
+    fedprox_mu: float,
+) -> Dict[str, float]:
+    model.to(device)
+    model.train()
+    criterion = get_criterion()
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+
+    global_params = None
+    if fedprox_mu > 0.0:
+        global_params = [p.detach().clone() for p in model.parameters()]
+
+    total_loss, n_batches = 0.0, 0
+    for _epoch in range(epochs):
+        for images, targets in dataloader:
+            images, targets = images.to(device), targets.to(device)
+            optimizer.zero_grad()
+            logits = model(images)
+            loss = criterion(logits, targets)
+            if global_params is not None:
+                loss = loss + _fedprox_term(model, global_params, fedprox_mu)
+            loss.backward()
+            optimizer.step()
+            total_loss += float(loss.item())
+            n_batches += 1
+
+    mean_loss = total_loss / n_batches if n_batches > 0 else float("nan")
+    return {"train_loss": mean_loss, "n_batches": n_batches}
+
+
+@torch.no_grad()
+def _evaluate_one_client(model: nn.Module, dataloader, *, device: torch.device) -> Tuple[float, int]:
+    model.to(device)
+    model.eval()
+    criterion = get_criterion()
+
+    total_loss, total_examples = 0.0, 0
+    for images, targets in dataloader:
+        images, targets = images.to(device), targets.to(device)
+        logits = model(images)
+        loss = criterion(logits, targets)
+        n = images.shape[0]
+        total_loss += float(loss.item()) * n
+        total_examples += n
+
+    if total_examples == 0:
+        return float("nan"), 0
+    return total_loss / total_examples, total_examples
+
+
+# ---------------------------------------------------------------------------
+# The Flower client
+# ---------------------------------------------------------------------------
+
+class EveFLClient(NumPyClient):
+    """One simulated hospital. Holds only its own local ResNet-18 copy
+    and its own local (non-IID) data partition — never sees other
+    hospitals' data or the aggregated data distribution."""
 
     def __init__(
         self,
+        cid: str,
+        data_root: Path,
+        partition_root: Path,
         *,
-        client_id: int,
-        train_loader,
-        device: Optional[torch.device] = None,
+        batch_size: int = 32,
+        local_epochs: int = DEFAULT_LOCAL_EPOCHS,
+        lr: float = DEFAULT_LR,
+        device: torch.device | None = None,
     ):
-        self.client_id = int(client_id)
-        self.train_loader = train_loader
-        self.device = device if device is not None else get_device()
+        self.cid = cid
+        self.hospital_id = int(cid)
+        self.data_root = data_root
+        self.partition_root = partition_root
+        self.batch_size = batch_size
+        self.local_epochs = local_epochs
+        self.lr = lr
+        self.device = device or get_device()
 
-        self.model = build_resnet18(pretrained=False)
-        self.model.to(self.device)
+        self.model = build_resnet18(pretrained=True)
+        self._train_loader = None  # lazy: built on first fit(), dataset load is not free
 
-        # Multi-label classification: 14 pathology labels
-        self.criterion = nn.BCEWithLogitsLoss()
+    def _get_train_loader(self):
+        if self._train_loader is None:
+            self._train_loader = get_hospital_dataloader(
+                self.data_root, self.partition_root, self.hospital_id,
+                batch_size=self.batch_size, train=True,
+            )
+        return self._train_loader
 
-        log.info("Created EveFL client %d on %s", self.client_id, self.device)
-
-    def get_parameters(self, config: Dict[str, fl.common.Scalar]) -> List[np.ndarray]:
-        """Return current local model parameters."""
+    def get_parameters(self, config: Dict[str, Scalar]) -> List[np.ndarray]:
         return get_model_parameters(self.model)
 
     def fit(
-        self,
-        parameters: List[np.ndarray],
-        config: Dict[str, fl.common.Scalar],
-    ) -> Tuple[List[np.ndarray], int, Dict[str, fl.common.Scalar]]:
-        """
-        Perform local training.
-
-        Expected config keys from strategy:
-            state          : "SECURE" | "CAUTION" | "LOCKDOWN"
-            proximal_mu    : float (0.0 for SECURE, >0 for CAUTION)
-            local_epochs   : int
-            server_round   : int
-            client_id      : str
-            qber           : float
-            q_max          : float
-        """
-        # -------------------------------------------------------------
-        # Load global model
-        # -------------------------------------------------------------
+        self, parameters: List[np.ndarray], config: Dict[str, Scalar]
+    ) -> Tuple[List[np.ndarray], int, Dict[str, Scalar]]:
         set_model_parameters(self.model, parameters)
 
-        # -------------------------------------------------------------
-        # Read server policy
-        # -------------------------------------------------------------
-        state = str(config.get("state", "SECURE")).upper()
-        local_epochs = int(config.get("local_epochs", DEFAULT_LOCAL_EPOCHS))
-        proximal_mu = float(config.get("proximal_mu", 0.0))
+        state = str(config.get("state", SecurityState.SECURE.value))
         qber = float(config.get("qber", 0.0))
-        q_max = float(config.get("q_max", qber))
-        server_round = int(config.get("server_round", config.get("round_id", 0)))
 
-        if state not in {"SECURE", "CAUTION", "LOCKDOWN"}:
-            raise ValueError(f"Unknown security state from server: {state}")
+        if state == SecurityState.LOCKDOWN.value:
+            # Defense in depth: even if the caller forgot to honor
+            # aggregate_fit's LOCKDOWN short-circuit, this client
+            # refuses to train or report a usable update.
+            log.info("[hospital %s] LOCKDOWN this round (qber=%.4f) — skipping local training.",
+                      self.cid, qber)
+            return parameters, 0, {"state": state, "qber": qber, "train_loss": float("nan")}
 
-        # -------------------------------------------------------------
-        # LOCKDOWN guard
-        # -------------------------------------------------------------
-        if state == "LOCKDOWN":
-            log.warning(
-                "[Client %d | Round %d] LOCKDOWN received. Skipping local training.",
-                self.client_id, server_round,
-            )
-            return (
-                get_model_parameters(self.model),
-                0,
-                {
-                    "state": "LOCKDOWN",
-                    "qber": qber,
-                    "q_max": q_max,
-                    "proximal_mu": 0.0,
-                    "local_epochs": 0,
-                    "training_skipped": 1,
-                },
-            )
-
-        # -------------------------------------------------------------
-        # FedProx activation
-        # -------------------------------------------------------------
-        use_fedprox = (state == "CAUTION" and proximal_mu > 0.0)
-        global_parameters = None
-
-        if use_fedprox:
-            global_parameters = [np.array(p, copy=True) for p in parameters]
-            log.info(
-                "[Client %d | Round %d] CAUTION: FedProx enabled, mu=%.6f",
-                self.client_id, server_round, proximal_mu,
-            )
-        else:
-            log.info(
-                "[Client %d | Round %d] %s: standard local objective",
-                self.client_id, server_round, state,
-            )
-
-        # -------------------------------------------------------------
-        # Optimizer (smoke-test: Adam; paper may use AdamW + cosine)
-        # -------------------------------------------------------------
-        optimizer = Adam(self.model.parameters(), lr=1e-3)
-        self.model.train()
-
-        total_loss = 0.0
-        total_examples = 0
-        total_batches = 0
-
-        # -------------------------------------------------------------
-        # Local epochs
-        # -------------------------------------------------------------
-        for epoch in range(local_epochs):
-            epoch_loss = 0.0
-            epoch_examples = 0
-
-            for images, targets in self.train_loader:
-                images = images.to(self.device, non_blocking=True)
-                targets = targets.to(self.device, non_blocking=True)
-
-                optimizer.zero_grad(set_to_none=True)
-
-                logits = self.model(images)
-
-                if logits.ndim != 2 or logits.shape[1] != NUM_CLASSES:
-                    raise RuntimeError(
-                        f"Model output must be [batch_size, {NUM_CLASSES}]. "
-                        f"Received {tuple(logits.shape)}."
-                    )
-
-                classification_loss = self.criterion(logits, targets)
-                loss = classification_loss
-
-                proximal_loss_value = 0.0
-                if use_fedprox:
-                    if global_parameters is None:
-                        raise RuntimeError("FedProx enabled but global parameters missing.")
-
-                    proximal_distance = calculate_fedprox_term(self.model, global_parameters)
-                    proximal_loss = (proximal_mu / 2.0) * proximal_distance
-                    loss = classification_loss + proximal_loss
-                    proximal_loss_value = float(proximal_loss.detach().cpu().item())
-
-                loss.backward()
-                optimizer.step()
-
-                batch_size = int(images.shape[0])
-                batch_loss = float(loss.detach().cpu().item())
-                epoch_loss += batch_loss * batch_size
-                epoch_examples += batch_size
-                total_batches += 1
-
-                log.debug(
-                    "[Client %d | Round %d | Epoch %d] batch_loss=%.6f cls_loss=%.6f prox_loss=%.6f",
-                    self.client_id, server_round, epoch + 1,
-                    batch_loss,
-                    float(classification_loss.detach().cpu().item()),
-                    proximal_loss_value,
-                )
-
-            total_loss += epoch_loss
-            total_examples += epoch_examples
-
-            mean_epoch_loss = epoch_loss / max(epoch_examples, 1)
-            log.info(
-                "[Client %d | Round %d] Epoch %d/%d loss=%.6f",
-                self.client_id, server_round, epoch + 1, local_epochs, mean_epoch_loss,
-            )
-
-        updated_parameters = get_model_parameters(self.model)
-        mean_loss = total_loss / max(total_examples, 1)
-
-        log.info(
-            "[Client %d | Round %d] Training complete: examples=%d batches=%d loss=%.6f",
-            self.client_id, server_round, total_examples, total_batches, mean_loss,
+        fedprox_mu = float(config.get("fedprox_mu", 0.0))
+        metrics = _train_one_client(
+            self.model, self._get_train_loader(),
+            device=self.device, epochs=self.local_epochs, lr=self.lr,
+            fedprox_mu=fedprox_mu,
         )
+        metrics.update({"state": state, "qber": qber, "fedprox_mu": fedprox_mu})
 
-        metrics: Dict[str, fl.common.Scalar] = {
-            "client_id": self.client_id,
-            "round": server_round,
-            "state": state,
-            "qber": qber,
-            "q_max": q_max,
-            "loss": mean_loss,
-            "local_epochs": local_epochs,
-            "proximal_mu": proximal_mu if use_fedprox else 0.0,
-            "fedprox_active": 1 if use_fedprox else 0,
-            "num_batches": total_batches,
-        }
-
-        return updated_parameters, total_examples, metrics
+        n_examples = len(self._get_train_loader().dataset)
+        return get_model_parameters(self.model), n_examples, metrics
 
     def evaluate(
-        self,
-        parameters: List[np.ndarray],
-        config: Dict[str, fl.common.Scalar],
-    ) -> Tuple[float, int, Dict[str, fl.common.Scalar]]:
-        """
-        Local evaluation placeholder.
-
-        The intended final evaluation uses a global held-out test set,
-        not per-client evaluation. Returning NaN keeps the interface valid.
-        """
+        self, parameters: List[np.ndarray], config: Dict[str, Scalar]
+    ) -> Tuple[float, int, Dict[str, Scalar]]:
         set_model_parameters(self.model, parameters)
-        return float("nan"), 0, {"evaluation_available": 0}
+        # Cheap proxy: evaluate on this hospital's own training split
+        # (a proper held-out per-client split is a straightforward
+        # extension of partition_and_save if you want it later).
+        # The dashboard's real accuracy number should come from the
+        # server-side evaluate_fn against the shared test set — see
+        # evaluation.py — since this is a non-IID, small local sample.
+        loader = self._get_train_loader()
+        loss, n_examples = _evaluate_one_client(self.model, loader, device=self.device)
+        return loss, n_examples, {}
 
-
-# ============================================================================
-# Flower client factory
-# ============================================================================
 
 def create_client_fn(
+    data_root: str | Path,
+    partition_root: str | Path,
     *,
-    data_root: Path,
-    partition_root: Path,
-    batch_size: int = DEFAULT_BATCH_SIZE,
-):
+    batch_size: int = 32,
+    local_epochs: int = DEFAULT_LOCAL_EPOCHS,
+    lr: float = DEFAULT_LR,
+) -> Callable[[str], Client]:
     """
-    Create the Flower client factory used by server.py / simulation.
-
-    Flower supplies cid (str) and this factory maps cid -> hospital partition.
+    Factory matching what `flwr.simulation.start_simulation(client_fn=...)`
+    would have expected — and what `runner.build_local_client_proxies()`
+    now uses to build in-process proxies instead.
     """
-    def client_fn(cid: str) -> fl.client.Client:
-        try:
-            client_id = int(cid)
-        except ValueError as exc:
-            raise ValueError(
-                f"Flower client IDs must be integer-compatible. Received cid={cid!r}"
-            ) from exc
+    data_root = Path(data_root)
+    partition_root = Path(partition_root)
 
-        log.info("Initializing Flower client %d", client_id)
-
-        train_loader = get_hospital_dataloader(
-            data_root=data_root,
-            partition_root=partition_root,
-            hospital_id=client_id,
-            batch_size=batch_size,
-            train=True,
-        )
-
-        client = EveFLClient(
-            client_id=client_id,
-            train_loader=train_loader,
-        )
-
-        return client.to_client()
+    def client_fn(cid: str) -> Client:
+        return EveFLClient(
+            cid, data_root, partition_root,
+            batch_size=batch_size, local_epochs=local_epochs, lr=lr,
+        ).to_client()
 
     return client_fn
-
-
-# ============================================================================
-# Standalone client builder for unit tests
-# ============================================================================
-
-def build_test_client(
-    *,
-    client_id: int,
-    train_loader,
-) -> EveFLClient:
-    """
-    Build a client directly for unit tests without Flower simulation.
-    """
-    return EveFLClient(
-        client_id=client_id,
-        train_loader=train_loader,
-    )

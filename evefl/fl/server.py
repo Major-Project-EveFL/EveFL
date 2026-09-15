@@ -34,7 +34,13 @@ Usage (Kaggle notebook cell, or CLI):
         --subset-fraction 0.05 \\
         --experiment-name demo_run
 
-Flower version target: flwr==1.11.1
+Flower version target: flwr==1.13.0 (flwr==1.11.1 also works functionally,
+but pins numpy<2.0, which fights Kaggle's numpy-2.x-native base image and
+causes repeated, hard-to-diagnose "numpy.dtype size changed" ABI errors
+in unrelated imports like pandas. 1.13.0+ relaxed that constraint to
+numpy>=1.26.0,<3.0.0 with no other API changes affecting this codebase
+-- verified by running the full test suite against both versions and
+diffing the output byte-for-byte.)
 """
 
 from __future__ import annotations

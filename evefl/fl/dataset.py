@@ -58,6 +58,14 @@ class ChestXray14Dataset(Dataset):
         transform: torchvision transform; defaults to the training transform
     """
 
+    # Shared across ALL instances pointed at the same data_root, so the
+    # (expensive, ~112k-file) rglob scan for NIH's nested images_00X/
+    # layout runs ONCE per process, not once per Dataset instantiation.
+    # Without this, 3 hospital clients + N test-set evaluations each
+    # trigger their own full rescan -- on Kaggle's mounted input, that
+    # can turn a several-minute run into the better part of an hour.
+    _shared_image_index_cache: dict[str, dict[str, Path]] = {}
+
     def __init__(
         self,
         data_root: str | Path,
@@ -91,8 +99,6 @@ class ChestXray14Dataset(Dataset):
             self._image_names = self._image_names[indices]
             self._labels = self._labels[indices]
 
-        self._image_index_cache: dict[str, Path] | None = None
-
     def __len__(self) -> int:
         return len(self._image_names)
 
@@ -103,13 +109,20 @@ class ChestXray14Dataset(Dataset):
 
         # NIH's Kaggle mirror sometimes ships as images_001/images, ...,
         # images_012/images rather than one flat images/ folder. Build a
-        # name->path index once (lazily) instead of rglob-ing per image.
-        if self._image_index_cache is None:
-            log.info("Building image path index under %s (first lookup miss)...", self.data_root)
-            self._image_index_cache = {p.name: p for p in self.data_root.rglob("*.png")}
+        # name->path index once PER data_root (shared across every
+        # Dataset instance, not rebuilt per instance -- see the class
+        # docstring) instead of rglob-ing per image or per instance.
+        root_key = str(self.data_root)
+        if root_key not in ChestXray14Dataset._shared_image_index_cache:
+            log.info("Building image path index under %s (first lookup miss, shared across this session)...",
+                      self.data_root)
+            ChestXray14Dataset._shared_image_index_cache[root_key] = {
+                p.name: p for p in self.data_root.rglob("*.png")
+            }
 
-        if image_name in self._image_index_cache:
-            return self._image_index_cache[image_name]
+        index = ChestXray14Dataset._shared_image_index_cache[root_key]
+        if image_name in index:
+            return index[image_name]
 
         raise FileNotFoundError(f"Image not found anywhere under {self.data_root}: {image_name}")
 

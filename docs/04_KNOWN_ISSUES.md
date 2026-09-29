@@ -54,7 +54,7 @@ Fix in order. Each fix needs a test.
   inflation is called fabricated in tests/test_ckks.py. QKDFL comparison numbers are invented.
   Replace with measured results and reimplement QKDFL as a baseline. MIA numbers must be measured
   on our models.
-- P1-8 Optimiser and schedule. Paper says AdamW, cosine annealing, lr 5e-4 in CAUTION. Code uses
+- P1-8 [FIXED: AdamW, cosine over the GLOBAL round sent in the round config, x0.5 in CAUTION, base lr 1e-3 (old code actually used Adam 1e-4), all recorded in the results JSON; tests/test_schedule.py] Optimiser and schedule. Paper says AdamW, cosine annealing, lr 5e-4 in CAUTION. Code uses
   Adam 1e-3 constant.
 - P1-9 CKKS and Groth16 are not integrated. See docs/03 for the design gaps.
 - P1-10 Citations. 11% attributed inconsistently (Lo et al. vs Shor-Preskill; cite Shor and

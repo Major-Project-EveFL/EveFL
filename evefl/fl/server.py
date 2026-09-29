@@ -59,12 +59,12 @@ import numpy as np
 import torch
 from flwr.common import ndarrays_to_parameters
 
-from evefl.fl.client import create_client_fn, get_model_parameters
+from evefl.fl.client import DEFAULT_LR, DEFAULT_WEIGHT_DECAY, create_client_fn, get_model_parameters
 from evefl.fl.dataset import partition_and_save
 from evefl.fl.evaluation import make_evaluate_fn
 from evefl.fl.model import build_resnet18, describe_initialisation
 from evefl.fl.runner import build_local_client_proxies, run_sequential_fl
-from evefl.fl.strategy import EveFLStrategy
+from evefl.fl.strategy import DEFAULT_CAUTION_LR_MULTIPLIER, EveFLStrategy
 from evefl.orchestration.state_machine import StateThresholds
 
 log = logging.getLogger("evefl.fl.server")
@@ -130,6 +130,9 @@ def create_strategy(
     n_qubits: int,
     num_clients: int,
     evaluate_fn=None,
+    base_lr: Optional[float] = None,
+    num_rounds: Optional[int] = None,
+    caution_lr_multiplier: float = DEFAULT_CAUTION_LR_MULTIPLIER,
 ) -> EveFLStrategy:
     return EveFLStrategy(
         initial_parameters=initial_parameters,
@@ -141,6 +144,9 @@ def create_strategy(
         min_fit_clients=min(num_clients, DEFAULT_MIN_FIT_CLIENTS),
         min_available_clients=max(num_clients, DEFAULT_MIN_AVAILABLE_CLIENTS),
         evaluate_fn=evaluate_fn,
+        base_lr=base_lr,
+        num_rounds=num_rounds,
+        caution_lr_multiplier=caution_lr_multiplier,
     )
 
 
@@ -163,6 +169,9 @@ def run_experiment(
     output_path: Path,
     pretrained: bool,
     pretrained_weights: Optional[Path] = None,
+    lr: float = DEFAULT_LR,
+    caution_lr_multiplier: float = DEFAULT_CAUTION_LR_MULTIPLIER,
+    weight_decay: float = DEFAULT_WEIGHT_DECAY,
     intercept_probability_schedule: Optional[Callable[[int], float]] = None,
     eval_every_n_rounds: int = 1,
     run_federated_evaluate: bool = True,
@@ -185,7 +194,7 @@ def run_experiment(
 
     client_fn = create_client_fn(
         data_root, partition_root,
-        batch_size=batch_size, local_epochs=local_epochs,
+        batch_size=batch_size, local_epochs=local_epochs, lr=lr, weight_decay=weight_decay,
     )
     client_proxies = build_local_client_proxies(client_fn, num_clients=num_clients)
 
@@ -204,6 +213,9 @@ def run_experiment(
         n_qubits=n_qubits,
         num_clients=num_clients,
         evaluate_fn=evaluate_fn,
+        base_lr=lr,
+        num_rounds=num_rounds,
+        caution_lr_multiplier=caution_lr_multiplier,
     )
 
     start_time = time.perf_counter()
@@ -235,6 +247,13 @@ def run_experiment(
         round_logs=strategy.round_logs,
         n_failures=len(history.failures),
         init_weights=init_weights,
+        optimizer={
+            "name": "adamw",
+            "lr": lr,
+            "schedule": "cosine_by_global_round",
+            "caution_lr_multiplier": caution_lr_multiplier,
+            "weight_decay": weight_decay,
+        },
     )
 
     with open(output_path, "w") as f:
@@ -262,6 +281,7 @@ def build_experiment_log(
     round_logs: list,
     n_failures: int,
     init_weights: Dict[str, Any],
+    optimizer: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     state_counts: Dict[str, int] = {}
     for r in round_logs:
@@ -278,6 +298,7 @@ def build_experiment_log(
         "intercept_probability": intercept_probability,
         "pretrained": init_weights["pretrained"],
         "init_weights_sha256": init_weights["sha256"],
+        "optimizer": optimizer,
     }
     config_hash = hashlib.sha256(json.dumps(config, sort_keys=True).encode("utf-8")).hexdigest()[:16]
 
@@ -320,6 +341,11 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--pretrained-weights", type=Path, default=None,
                     help="Local ImageNet ResNet-18 state-dict file (for offline Kaggle notebooks; "
                          "see scripts/cache_pretrained_weights.py). Without it, torchvision downloads the weights.")
+    p.add_argument("--lr", type=float, default=DEFAULT_LR,
+                    help="Base (round-1) learning rate for AdamW; cosine-annealed over the GLOBAL rounds.")
+    p.add_argument("--caution-lr-multiplier", type=float, default=DEFAULT_CAUTION_LR_MULTIPLIER,
+                    help="Learning-rate multiplier applied in CAUTION rounds (0.5: 1e-3 -> 5e-4).")
+    p.add_argument("--weight-decay", type=float, default=DEFAULT_WEIGHT_DECAY)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--experiment-name", type=str, default="evefl_experiment")
     p.add_argument("--output", type=Path, default=Path("results/fl_training_log.json"))
@@ -370,6 +396,9 @@ def main(argv=None) -> None:
         output_path=args.output,
         pretrained=args.pretrained,
         pretrained_weights=args.pretrained_weights,
+        lr=args.lr,
+        caution_lr_multiplier=args.caution_lr_multiplier,
+        weight_decay=args.weight_decay,
         eval_every_n_rounds=args.eval_every_n_rounds,
         run_federated_evaluate=not args.no_federated_evaluate,
     )

@@ -55,6 +55,7 @@ from flwr.server.client_manager import ClientManager
 from flwr.server.client_proxy import ClientProxy
 from flwr.server.strategy import Strategy
 
+from evefl.fl.schedule import cosine_lr
 from evefl.fl.screening import flag_anomalous_updates, update_delta_norm
 from evefl.orchestration.state_machine import SecurityState, StateController, StateThresholds
 from evefl.quantum.bb84 import BB84Protocol
@@ -64,6 +65,7 @@ log = logging.getLogger(__name__)
 
 DEFAULT_CAUTION_FEDPROX_MU = 0.01
 DEFAULT_ANOMALY_K = 3.0  # flag an update if its delta norm > median + k*max(1.4826*MAD, rel_floor*median)
+DEFAULT_CAUTION_LR_MULTIPLIER = 0.5  # paper: reduced learning rate in CAUTION (1e-3 -> 5e-4)
 DEFAULT_ANOMALY_REL_FLOOR = 0.25  # spread floor, so near-identical honest clients don't make MAD ~ 0 (see screening.py)
 
 
@@ -97,6 +99,9 @@ class EveFLStrategy(Strategy):
         caution_fedprox_mu: float = DEFAULT_CAUTION_FEDPROX_MU,
         anomaly_k: float = DEFAULT_ANOMALY_K,
         anomaly_rel_floor: float = DEFAULT_ANOMALY_REL_FLOOR,
+        base_lr: Optional[float] = None,
+        num_rounds: Optional[int] = None,
+        caution_lr_multiplier: float = DEFAULT_CAUTION_LR_MULTIPLIER,
         evaluate_fn: Optional[Callable[[int, List[np.ndarray], dict],
                                         Optional[Tuple[float, Dict[str, Scalar]]]]] = None,
     ):
@@ -125,6 +130,11 @@ class EveFLStrategy(Strategy):
         self._caution_fedprox_mu = caution_fedprox_mu
         self._anomaly_k = anomaly_k
         self._anomaly_rel_floor = anomaly_rel_floor
+        # If base_lr is given, the server sends each client a per-round learning rate that follows
+        # a cosine over the GLOBAL round (schedule.py). Without num_rounds the base rate is constant.
+        self._base_lr = base_lr
+        self._num_rounds = num_rounds
+        self._caution_lr_multiplier = caution_lr_multiplier
         self._evaluate_fn = evaluate_fn
 
         # Last known good parameters — what LOCKDOWN rounds fall back to.
@@ -143,6 +153,7 @@ class EveFLStrategy(Strategy):
         self._round_system_qber: float = 0.0
         self._round_intercept_probability: float = 0.0
         self._round_qber_per_client: Dict[str, float] = {}
+        self._round_learning_rate: Optional[float] = None
         # Global weights sent to clients this round: the reference for update-delta norms.
         self._round_global_ndarrays: List[np.ndarray] = []
 
@@ -205,6 +216,15 @@ class EveFLStrategy(Strategy):
             "fedprox_mu": fedprox_mu,
             "server_round": server_round,
         }
+        if self._base_lr is not None:
+            learning_rate = (
+                cosine_lr(self._base_lr, server_round, self._num_rounds)
+                if self._num_rounds is not None else self._base_lr
+            )
+            if state == SecurityState.CAUTION:
+                learning_rate *= self._caution_lr_multiplier
+            config["learning_rate"] = learning_rate
+            self._round_learning_rate = learning_rate
         fit_ins = FitIns(parameters, config)
         return [(client, fit_ins) for client in clients]
 
@@ -223,6 +243,7 @@ class EveFLStrategy(Strategy):
             "system_qber": system_qber,
             "intercept_probability": self._round_intercept_probability,
             "qber_per_client": dict(self._round_qber_per_client),
+            "learning_rate": self._round_learning_rate,
             "n_results": len(results),
             "n_failures": len(failures),
         }

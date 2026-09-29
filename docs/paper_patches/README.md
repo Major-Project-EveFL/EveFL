@@ -25,8 +25,11 @@ Status: `[ ]` open, `[~]` code done / paper text pending, `[x]` paper updated.
 - [~] **Evaluation protocol (P0-3).** Macro AUC-ROC on the held-out test patients after every round
   (LOCKDOWN rounds included, so the curve has flat stretches); classes with no positives in the
   test set are skipped and listed. Per-class AUC in the results JSON.
-- [ ] **Optimiser and schedule (P1-8).** Paper says AdamW + cosine annealing, lr 5e-4 in CAUTION;
-  code used Adam 1e-3 constant. Update whichever side changes.
+- [~] **Optimiser and schedule (P1-8).** Code now matches the paper: AdamW (weight decay 0.01, not
+  specified in the paper: state it), base lr 1e-3, cosine annealing over the global round
+  (`lr_t = 0.5*base*(1+cos(pi*(t-1)/T))`), lr x0.5 in CAUTION (5e-4). Fresh optimiser each round
+  (Adam moments are not carried across rounds): say so. The old code actually ran Adam at 1e-4, so
+  any earlier Kaggle numbers used a different setting.
 
 ## Claims that are not measured yet
 - [ ] **Measured vs projected labels.** Every Section VIII number (AUC, MIA, overhead, Table IV)

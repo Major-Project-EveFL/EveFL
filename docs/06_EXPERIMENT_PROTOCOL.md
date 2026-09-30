@@ -36,3 +36,51 @@ JSON per run (config, seeds, per-round log, metrics), aggregated tables, and thr
 FSM diagram, QBER validation curve (simulated vs alpha/4 with noise), accuracy-security Pareto
 curve. `evefl report` regenerates all figures and LaTeX tables from results. Placeholders in the
 paper stay commented until a result file replaces them.
+
+## Pre-registered: QBER sample-size sweep (Phase 1)
+
+Committed BEFORE the sweep is run, so the headline `n_qubits` / `sample_fraction` cannot be tuned
+to the results. Nothing in the paper is measured yet, so no number needs protecting; the point is
+that the choice follows a stated rule.
+
+### What is swept
+- `n_qubits` in {256, 512, 1024, 2048, 4096, 8192, 16384}
+- `sample_fraction` in {0.10, 0.25, 0.50}
+- baseline bit-flip noise e in {0, 0.01, 0.02, 0.03}
+- Eve intercept probability alpha in {0.0, 0.1, ..., 1.0}
+- 3 independent links with the same alpha; system QBER = max over the 3 links (as in the strategy)
+- thresholds fixed at secure_max = 0.05, caution_max = 0.11 (never tuned); the state is whatever
+  `StateController.classify` returns; no hysteresis (this measures the per-round classifier)
+- backend `bb84_numpy`, 20,000 simulated rounds per cell, experiment seed 0 (streams from
+  SeedSequence(0, round, link)), so all alpha rows are paired. Rates are reported with Wilson 95%
+  intervals and next to the exact analytic value (binomial mixture over the random sifted length),
+  which must agree with the simulation.
+
+### Quantities reported for every cell
+- false CAUTION rate: P(system state != SECURE) at alpha = 0
+- false LOCKDOWN rate: P(system state = LOCKDOWN) at alpha = 0
+- detection rate: P(system state != SECURE) at each alpha > 0 (also P(LOCKDOWN) as a secondary column)
+- expected sample size m and expected leftover sifted key per qubit sent, n_sifted * (1 - sample_fraction) / n
+  (a bigger sample leaves less key; this is a cost, reported not optimised)
+
+### Selection rule for the headline setting
+A setting (n_qubits, sample_fraction) is a CANDIDATE iff ALL hold:
+1. false CAUTION rate <= 1% at e = 0.01 (system level, max over 3 links). Anchored at 1% noise only.
+2. detection rate >= 95% at alpha = 0.30 for e in {0, 0.01} (system level, max over 3 links).
+   alpha = 0.30 is the CAUTION demo value; it is the reliability claim the paper may make.
+3. expected sample size m >= 100 bits (the config guard).
+
+Headline = the candidate with the SMALLEST n_qubits; ties broken by the larger leftover key (smaller
+sample_fraction). Reason: the criteria only get easier with larger blocks, so this is the smallest
+block for which the claims hold, and any larger block does at least as well. If no candidate exists,
+that itself is the finding and the claims must be weakened; the grid is not extended after seeing results.
+
+Not part of the rule, reported as limitations:
+- e = 0.02 and e = 0.03 are reported but not required. A 3% baseline sits close to the 5% boundary, so
+  persistent false CAUTION there is expected. Dynamic thresholds (Zhang et al., cited in the paper;
+  VERIFY the reference) are the proper fix and are out of scope.
+- Larger blocks are more realistic (real QKD systems process far more than 1024 qubits per block);
+  the headline is the minimum sufficient block, not a claim about any real system.
+- QBER is a link-disturbance signal, not an attack classifier (docs/03).
+
+Outputs: `docs/validation/qber_sweep.json` (all cells, config, seeds) and the table/figure generated from it.

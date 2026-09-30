@@ -1,5 +1,7 @@
 import pytest
+
 from evefl.quantum.bb84 import BB84Protocol
+
 
 def test_no_eavesdropper_low_qber():
     protocol = BB84Protocol(seed=42)

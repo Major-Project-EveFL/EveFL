@@ -58,8 +58,8 @@ from flwr.server.strategy import Strategy
 from evefl.fl.schedule import cosine_lr
 from evefl.fl.screening import flag_anomalous_updates, update_delta_norm
 from evefl.orchestration.state_machine import SecurityState, StateController, StateThresholds
-from evefl.quantum.bb84 import BB84Protocol
 from evefl.quantum.base import QKDResult
+from evefl.quantum.bb84 import BB84Protocol
 
 log = logging.getLogger(__name__)
 

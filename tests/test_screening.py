@@ -17,7 +17,6 @@ from evefl.fl.screening import flag_anomalous_updates, screening_threshold, upda
 from evefl.fl.strategy import EveFLStrategy
 from evefl.quantum.base import QKDResult
 
-
 # --------------------------------------------------------------------------
 # update_delta_norm
 # --------------------------------------------------------------------------

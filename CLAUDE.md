@@ -61,6 +61,7 @@ streamlit run dashboard/app.py
   (markers `ckks`, `zk` in `tests/conftest.py`). Run the full suite on Kaggle/WSL.
 - Baseline (2026-09-29, before any fixes): 22 passed, 6 errors (Groth16, no circom/snarkjs). With markers: 22 passed, 6 skipped.
 - CI: `.github/workflows/ci.yml` runs two jobs on Linux with `--require-optional-tools` (skips become failures): tests, and Groth16 (circom@0.5.46 + snarkjs@0.4.27). Check runs via the public API (no `gh`).
+- Tooling: `pip install -r requirements-dev.txt`, then `ruff check .` and `mypy` (typed core listed in pyproject). Both run in CI (lint job). Optional: `pre-commit install`. Ruff is lint-only; no auto-formatter yet (would rewrite every file).
 - No `gh` CLI. Workflow: one branch per task, push to `parineeta`, open the PR on GitHub web. Tooling/CI PR comes after the P0 fixes.
 
 ## Gotchas

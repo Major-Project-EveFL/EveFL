@@ -84,3 +84,14 @@ Not part of the rule, reported as limitations:
 - QBER is a link-disturbance signal, not an attack classifier (docs/03).
 
 Outputs: `docs/validation/qber_sweep.json` (all cells, config, seeds) and the table/figure generated from it.
+
+### Clarifications (added before the sweep was run; no criterion changed)
+- The selection rule is evaluated on the EXACT analytic probabilities (binomial mixture over the random
+  sifted length, independent links), not on Monte Carlo estimates, so the choice has no simulation noise.
+  Comparisons with the boundaries use the same float comparison as `StateController.classify`
+  (QBER = k/m, SECURE iff k/m < 0.05). The simulation is reported next to it as a check.
+- The sweep engine samples (sifted length, sample errors) directly from their exact distributions
+  (sifted ~ Binomial(n, 1/2); given the sample size m, errors ~ Binomial(m, p) with
+  p = e + (1 - 2e) * alpha / 4), using common uniform draws across alpha and e so the rows are paired.
+  This is exact, not an approximation, and is verified against the full `bb84_numpy` protocol on a
+  subset of cells (results in the same JSON). It replaces per-qubit simulation only for speed.

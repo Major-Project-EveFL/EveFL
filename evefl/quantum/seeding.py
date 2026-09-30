@@ -59,4 +59,4 @@ def stream_generators(root: np.random.SeedSequence, call_index: int = 0) -> Dict
 
 def int_seed(root: np.random.SeedSequence) -> int:
     """A 31-bit integer seed derived from `root`, for backends that want a plain int (Qiskit)."""
-    return int(root.generate_state(1, dtype=np.uint32)[0] & 0x7FFFFFFF)
+    return int(root.generate_state(1)[0]) & 0x7FFFFFFF  # default dtype is uint32

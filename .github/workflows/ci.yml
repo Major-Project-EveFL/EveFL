@@ -26,7 +26,7 @@ jobs:
           cache-dependency-path: requirements-dev.txt
 
       # Only the tools; mypy is configured to check the typed core, which has no heavy dependencies.
-      - run: pip install ruff==0.6.9 mypy==1.11.2 pandas-stubs types-PyYAML numpy
+      - run: pip install ruff==0.6.9 mypy==1.13.0 pandas-stubs types-PyYAML numpy
 
       - run: ruff check .
 

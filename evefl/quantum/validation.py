@@ -98,10 +98,12 @@ def analytic_check(counts: TrialCounts, channel: ChannelModel, confidence: float
 
 def compare_backends(a: TrialCounts, b: TrialCounts) -> Dict[str, float]:
     """2x2 chi-square test that both backends have the same error probability."""
+    errors = a.pooled_errors + b.pooled_errors
+    non_errors = (a.pooled_size - a.pooled_errors) + (b.pooled_size - b.pooled_errors)
     table = np.array(
         [[a.pooled_errors, a.pooled_size - a.pooled_errors], [b.pooled_errors, b.pooled_size - b.pooled_errors]]
     )
-    if table[:, 0].sum() == 0 or table[:, 1].sum() == 0:
+    if errors == 0 or non_errors == 0:
         # Both backends produced only errors, or none at all: identical by construction.
         return {"chi2": 0.0, "pvalue": 1.0, "qber_a": a.pooled_errors / a.pooled_size,
                 "qber_b": b.pooled_errors / b.pooled_size}

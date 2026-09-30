@@ -92,7 +92,7 @@ class BB84NumpyProtocol(QKDProtocol):
         sifted = alice_bases == bob_bases
         sifted_alice = alice_bits[sifted]
         sifted_bob = bob_bits[sifted]
-        n_sifted = int(sifted.sum())
+        n_sifted = int(np.count_nonzero(sifted))
 
         errors = sifted_alice != sifted_bob
         true_errors = int(errors.sum())

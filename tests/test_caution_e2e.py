@@ -9,7 +9,6 @@ here and CAUTION rounds returned no aggregate.
 """
 
 import numpy as np
-import pytest
 from flwr.common import ndarrays_to_parameters, parameters_to_ndarrays
 
 from evefl.fl import client as client_module

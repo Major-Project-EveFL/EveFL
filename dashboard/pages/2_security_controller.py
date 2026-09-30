@@ -12,7 +12,7 @@ import streamlit as st
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
-from evefl.orchestration.state_machine import StateController, StateThresholds, SecurityState
+from evefl.orchestration.state_machine import SecurityState, StateController, StateThresholds
 
 st.set_page_config(page_title="Security Controller", page_icon="🛡️")
 

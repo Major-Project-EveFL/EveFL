@@ -26,7 +26,6 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
 import sys
 import tempfile
 import time
@@ -40,16 +39,15 @@ from PIL import Image
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
-from evefl.fl.dataset import partition_and_save, get_hospital_dataloader
-from evefl.fl.model import build_resnet18, get_device
+import flwr as fl
+import torch
+from flwr.common import ndarrays_to_parameters
+
 from evefl.fl.client import create_client_fn
+from evefl.fl.dataset import partition_and_save
+from evefl.fl.model import build_resnet18, get_device
 from evefl.fl.strategy import EveFLStrategy
 from evefl.orchestration.state_machine import StateThresholds
-
-import flwr as fl
-from flwr.common import ndarrays_to_parameters
-import torch
-
 
 logging.basicConfig(
     level=logging.INFO,
@@ -188,7 +186,7 @@ def run_smoke(
         log.info("[5/5] Running Flower simulation (%d rounds)...", n_rounds)
         start = time.perf_counter()
 
-        history = fl.simulation.start_simulation(
+        fl.simulation.start_simulation(
             client_fn=client_fn,
             num_clients=3,
             config=fl.server.ServerConfig(num_rounds=n_rounds),

@@ -3,7 +3,6 @@ P1-8 tests: AdamW + cosine annealing that follows the GLOBAL round (schedule.py)
 reduced rate in CAUTION, sent to clients in the round config.
 """
 
-import math
 
 import numpy as np
 import pytest
@@ -18,7 +17,6 @@ from evefl.fl.schedule import cosine_lr
 from evefl.fl.strategy import EveFLStrategy
 from evefl.quantum.base import QKDResult
 from tests.test_screening import _Manager, _Proxy
-
 
 # --------------------------------------------------------------------------
 # cosine_lr

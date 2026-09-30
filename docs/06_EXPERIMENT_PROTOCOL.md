@@ -95,3 +95,21 @@ Outputs: `docs/validation/qber_sweep.json` (all cells, config, seeds) and the ta
   p = e + (1 - 2e) * alpha / 4), using common uniform draws across alpha and e so the rows are paired.
   This is exact, not an approximation, and is verified against the full `bb84_numpy` protocol on a
   subset of cells (results in the same JSON). It replaces per-qubit simulation only for speed.
+
+### Result of the sweep (2026-09-30, `docs/validation/qber_sweep.json`)
+Produced by `scripts/qber_sweep.py` exactly as pre-registered (grid, thresholds, seed, rule unchanged).
+The exact analytic rates agree with the paired Monte Carlo (analytic value inside the simulated 95% interval
+in 907 of 924 cells) and with the full `bb84_numpy` protocol on four cells (p-values 0.49 to 1.0).
+- 15 of the 21 (n_qubits, sample_fraction) settings qualify. By the rule, the headline is
+  **n_qubits = 512, sample_fraction = 0.5** (expected sample 128 bits; false CAUTION 0.13% at e = 1%;
+  detection at alpha = 0.3 of 99.7% at e = 0 and 99.9% at e = 1%; leftover sifted key 0.25 per qubit).
+- Tension worth deciding explicitly: that setting spends half of the sifted key on the sample.
+  n_qubits = 1024, sample_fraction = 0.25 also qualifies (false CAUTION 0.11%, detection 99.7% / 99.9%,
+  leftover 0.375 per qubit) and is closer to realistic block sizes. The rule was fixed before the run and
+  is not changed here; any other choice must be argued explicitly in the paper as a deviation.
+- False CAUTION at alpha = 0 (system level, f = 0.25) grows quickly with baseline noise: at n = 1024 it is
+  0.11% (e = 1%), 4.6% (e = 2%), 25.6% (e = 3%); n = 4096 brings e = 3% down to 2.1% and n = 8192 to 0.08%.
+  With 3% noise the 5% boundary is simply close to the noise floor. Reported as a limitation (dynamic
+  thresholds are the proper fix; verify the Zhang et al. citation).
+- Detection is essentially complete from alpha = 0.3 (n = 1024, e = 1%: 99.9%); at alpha = 0.2 it is 95.2% and at
+  alpha = 0.1 only 40%, so weak intermittent interception is not reliably caught at these block sizes.

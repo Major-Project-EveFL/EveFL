@@ -36,7 +36,7 @@ Status: `[ ]` open, `[~]` code done / paper text pending, `[x]` paper updated.
   `e + (1 - 2e) * alpha / 4` (not alpha/4). Say it is a bit-flip model, not depolarizing. The
   simulator is exact (no approximation) and was cross-validated against gate-level Qiskit
   (`docs/validation/backend_crosscheck.json`).
-- [ ] **Sample size (Phase 1).** n_qubits and sample_fraction are explicit experiment parameters,
+- [~] **Sample size (Phase 1).** Sweep done (`docs/validation/qber_sweep.json`, results in docs/06); headline choice pending the team's decision between the rule's output (512, 0.5) and (1024, 0.25). n_qubits and sample_fraction are explicit experiment parameters,
   recorded per run. The headline setting comes from the sample-size sweep with a pre-registered
   selection rule (docs/06); state the rule, the sweep, and the limitation that a 3% noise baseline
   sits near the 5% boundary (persistent false CAUTION there is expected; dynamic thresholds are the

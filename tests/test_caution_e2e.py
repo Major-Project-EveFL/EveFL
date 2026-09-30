@@ -28,7 +28,8 @@ class _FixedQberProtocol:
     def __init__(self, *args, **kwargs):
         pass
 
-    def run_exchange(self, n_qubits, intercept_probability=0.0):
+    def run_exchange(self, n_qubits, intercept_probability=0.0, *, channel=None):
+        intercept_probability = channel.intercept_probability if channel else intercept_probability
         return QKDResult(sifted_key=[], qber=type(self).qber, n_qubits_sent=n_qubits, n_sifted=0,
                          intercept_probability=intercept_probability,
                          eavesdropper_active=intercept_probability > 0)
@@ -37,7 +38,7 @@ class _FixedQberProtocol:
 def _run(monkeypatch, synthetic_data, qber, rounds=1):
     data_root, partition_root = synthetic_data
     _FixedQberProtocol.qber = qber
-    monkeypatch.setattr(strategy_module, "BB84Protocol", _FixedQberProtocol)
+    monkeypatch.setattr(strategy_module, "create_protocol", lambda *args, **kwargs: _FixedQberProtocol())
     # Avoid downloading ImageNet weights in tests.
     monkeypatch.setattr(client_module, "build_resnet18", lambda pretrained=True: build_resnet18(pretrained=False))
 

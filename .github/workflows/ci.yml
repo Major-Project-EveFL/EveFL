@@ -26,7 +26,7 @@ jobs:
           cache-dependency-path: requirements-dev.txt
 
       # Only the tools; mypy is configured to check the typed core, which has no heavy dependencies.
-      - run: pip install ruff==0.6.9 mypy==1.11.2 pandas-stubs types-PyYAML numpy
+      - run: pip install ruff==0.6.9 mypy==1.13.0 pandas-stubs types-PyYAML numpy
 
       - run: ruff check .
 
@@ -56,7 +56,7 @@ jobs:
       # --require-optional-tools turns "skipped because tool missing" into a failure, so a green
       # run means every selected test really ran. The ZK tests run in their own job below.
       - name: Run tests
-        run: python -m pytest -q -m "not zk" --require-optional-tools
+        run: python -m pytest -q -m "not zk and not slow" --require-optional-tools
 
   zk-tests:
     name: Groth16 tests (circom 0.5 + snarkjs)

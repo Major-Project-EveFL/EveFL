@@ -35,7 +35,7 @@ Fix in order. Each fix needs a test.
   until wired. Wire it or fix the claims.
 - P1-2 BB84 post-processing. `sifted_key` includes publicly compared sample bits, and there is no
   error correction, no real privacy amplification and no authentication (see docs/03).
-- P1-3 Simulator has no channel noise. Add a depolarizing or bit-flip baseline. Without it,
+- P1-3 [PARTLY FIXED: ChannelModel with bit-flip noise, expected QBER e+(1-2e)alpha/4 tested; false-alarm rates still to be measured by the sample-size sweep, docs/06] Simulator has no channel noise. Add a depolarizing or bit-flip baseline. Without it,
   false-alarm behaviour and SECURE-band statistics are meaningless.
 - P1-4 QBER estimated on a 25% sample (about 128 bits at n=1024). Statistical noise is large. At
   alpha=0.10 (mean 2.5%), a single client exceeds 5% about 3.6% of the time, and about 10% for
@@ -64,11 +64,11 @@ Fix in order. Each fix needs a test.
   especially QKDFL, FedSec, "FedMed" (Roth et al.) and Kaissis et al. (Lancet Digital Health).
 
 ## P2 (engineering and docs)
-- P2-1 evefl/demo_validation.py is broken (`eavesdropper_active` kwarg no longer exists). README
+- P2-1 [PARTLY FIXED: demo_validation.py and the README quick-start now use the real API; README status table still stale] evefl/demo_validation.py is broken (`eavesdropper_active` kwarg no longer exists). README
   quick-start uses `eve_intercept_rate` (nonexistent) and shows a wrong example output. README
   status table is stale. quantum/base.py docstring is stale.
 - P2-2 bb84.py ValueError message missing f-string prefix.
-- P2-3 BB84 runs one Aer job per qubit (up to two), taking seconds per client-round, not the
+- P2-3 [FIXED: exact vectorised backend bb84_numpy (default), Qiskit kept as reference and cross-checked by tests/test_backend_crosscheck.py + scripts/validate_backends.py] BB84 runs one Aer job per qubit (up to two), taking seconds per client-round, not the
   paper's 180 ms. Add a vectorised numpy backend and keep Qiskit for cross-validation.
 - P2-4 State machine has no hysteresis. Add it plus property tests.
 - P2-5 `min_available_clients=max(num_clients,3)` can hang for num_clients<3. Flower

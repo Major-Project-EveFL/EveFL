@@ -30,7 +30,8 @@ class _QberEqualsAlphaProtocol:
     def __init__(self, *args, **kwargs):
         pass
 
-    def run_exchange(self, n_qubits, intercept_probability=0.0):
+    def run_exchange(self, n_qubits, intercept_probability=0.0, *, channel=None):
+        intercept_probability = channel.intercept_probability if channel else intercept_probability
         return QKDResult([], intercept_probability, n_qubits, 0, intercept_probability, intercept_probability > 0)
 
 
@@ -82,7 +83,7 @@ def test_evaluate_global_model_returns_json_ready_structured_metrics(synthetic_d
 
 def test_runner_evaluates_every_round_including_lockdown_and_writes_json(monkeypatch, synthetic_data, tmp_path):
     data_root, partition_root = synthetic_data
-    monkeypatch.setattr(strategy_module, "BB84Protocol", _QberEqualsAlphaProtocol)
+    monkeypatch.setattr(strategy_module, "create_protocol", lambda *args, **kwargs: _QberEqualsAlphaProtocol())
     monkeypatch.setattr(client_module, "build_resnet18", lambda pretrained=True: build_resnet18(pretrained=False))
 
     alphas = {1: 0.0, 2: 0.20, 3: 0.0}  # SECURE, LOCKDOWN, SECURE

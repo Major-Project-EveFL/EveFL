@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Dict, Tuple
+from typing import Any, Dict, Tuple
 
 import numpy as np
 from scipy import stats
@@ -97,7 +97,7 @@ class PairedDraws:
         return cls(sifted, uniforms)
 
 
-def simulate_system_rates(draws: PairedDraws, f: float, p: float, thresholds: StateThresholds) -> Dict[str, float]:
+def simulate_system_rates(draws: PairedDraws, f: float, p: float, thresholds: StateThresholds) -> Dict[str, Any]:
     """Monte Carlo rates for the system state (max QBER over links) from paired draws."""
     m = sample_size(draws.sifted, f)
     k = np.where(m > 0, stats.binom.ppf(draws.uniforms, m, p), 0).astype(np.int64)

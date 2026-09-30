@@ -14,7 +14,9 @@ include = ["evefl*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-m 'not slow'"
 markers = [
+    "slow: long-running statistical cross-checks (run nightly or with -m slow)",
     "ckks: needs the tenseal package (auto-skipped if missing)",
     "zk: needs circom and snarkjs on PATH (auto-skipped if missing)",
 ]

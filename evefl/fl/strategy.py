@@ -5,7 +5,7 @@ federated aggregation.
 Every round, before any client trains anything:
 
     1. Run one independent BB84 exchange per participating client
-       (evefl.quantum.bb84.BB84Protocol) — this simulates the QKD
+       (evefl.quantum.factory.create_protocol) — this simulates the QKD
        handshake on that hospital's link to the server for this round.
     2. Take system_qber = max(per-client QBER). A single compromised
        link is the thing we care about catching, so we use the
@@ -36,7 +36,6 @@ engine; it only needs a `ClientManager`-shaped object and
 
 from __future__ import annotations
 
-import hashlib
 import logging
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
@@ -58,8 +57,10 @@ from flwr.server.strategy import Strategy
 from evefl.fl.schedule import cosine_lr
 from evefl.fl.screening import flag_anomalous_updates, update_delta_norm
 from evefl.orchestration.state_machine import SecurityState, StateController, StateThresholds
-from evefl.quantum.base import QKDResult
-from evefl.quantum.bb84 import BB84Protocol
+from evefl.quantum.base import ChannelModel, QKDResult
+from evefl.quantum.config import QKDConfig
+from evefl.quantum.factory import DEFAULT_BACKEND, create_protocol
+from evefl.quantum.seeding import qkd_seed_sequence
 
 log = logging.getLogger(__name__)
 
@@ -67,21 +68,6 @@ DEFAULT_CAUTION_FEDPROX_MU = 0.01
 DEFAULT_ANOMALY_K = 3.0  # flag an update if its delta norm > median + k*max(1.4826*MAD, rel_floor*median)
 DEFAULT_CAUTION_LR_MULTIPLIER = 0.5  # paper: reduced learning rate in CAUTION (1e-3 -> 5e-4)
 DEFAULT_ANOMALY_REL_FLOOR = 0.25  # spread floor, so near-identical honest clients don't make MAD ~ 0 (see screening.py)
-
-
-def _stable_seed(server_round: int, cid: str) -> int:
-    """
-    Deterministic seed for a (round, client) pair.
-
-    Python's builtin `hash()` on strings is randomized per process
-    (PYTHONHASHSEED) unless explicitly fixed, so seeding BB84 with
-    `hash(cid)` would silently give a different QBER trajectory on
-    every run even with the same experiment seed. SHA-256 is stable
-    across processes/interpreters, so the same (round, cid) always
-    gets the same BB84 draw.
-    """
-    digest = hashlib.sha256(f"{server_round}:{cid}".encode("utf-8")).hexdigest()
-    return int(digest, 16) % 1_000_000
 
 
 class EveFLStrategy(Strategy):
@@ -102,6 +88,10 @@ class EveFLStrategy(Strategy):
         base_lr: Optional[float] = None,
         num_rounds: Optional[int] = None,
         caution_lr_multiplier: float = DEFAULT_CAUTION_LR_MULTIPLIER,
+        qkd_backend: str = DEFAULT_BACKEND,
+        sample_fraction: float = 0.25,
+        bit_flip_probability: float = 0.0,
+        experiment_seed: int = 0,
         evaluate_fn: Optional[Callable[[int, List[np.ndarray], dict],
                                         Optional[Tuple[float, Dict[str, Scalar]]]]] = None,
     ):
@@ -123,6 +113,19 @@ class EveFLStrategy(Strategy):
         self._intercept_probability = float(intercept_probability)
         self._intercept_probability_schedule = intercept_probability_schedule
         self._n_qubits = int(n_qubits)
+        self._qkd_backend = qkd_backend
+        self._sample_fraction = sample_fraction
+        self._bit_flip_probability = bit_flip_probability
+        # Streams are derived from (experiment_seed, round, client): different experiment seeds give
+        # different QBER trajectories, and scenarios that differ only in alpha are paired.
+        self._experiment_seed = int(experiment_seed)
+        _qkd = QKDConfig(qkd_backend, self._n_qubits, sample_fraction, bit_flip_probability)
+        if _qkd.expected_sample_size < _qkd.MIN_EXPECTED_SAMPLE:
+            log.warning(
+                "QKD config expects only ~%.0f bits in the QBER sample (n_qubits=%d, sample_fraction=%.2f): "
+                "the state decisions will mostly be noise. Use at least %d.",
+                _qkd.expected_sample_size, self._n_qubits, sample_fraction, _qkd.MIN_EXPECTED_SAMPLE,
+            )
         self._state_controller = StateController(thresholds or StateThresholds())
         self._fraction_fit = fraction_fit
         self._min_fit_clients = min_fit_clients
@@ -154,6 +157,7 @@ class EveFLStrategy(Strategy):
         self._round_intercept_probability: float = 0.0
         self._round_qber_per_client: Dict[str, float] = {}
         self._round_learning_rate: Optional[float] = None
+        self._round_qkd_details: Dict[str, Dict[str, float]] = {}
         # Global weights sent to clients this round: the reference for update-delta norms.
         self._round_global_ndarrays: List[np.ndarray] = []
 
@@ -184,11 +188,25 @@ class EveFLStrategy(Strategy):
 
         # -- 2. One BB84 exchange per client, this round ---------------
         qber_per_client: Dict[str, float] = {}
+        qkd_details: Dict[str, Dict[str, float]] = {}
+        channel = ChannelModel(intercept_probability=alpha, bit_flip_probability=self._bit_flip_probability)
         for client in clients:
-            seed = _stable_seed(server_round, client.cid)
-            bb84 = BB84Protocol(seed=seed)
-            result: QKDResult = bb84.run_exchange(n_qubits=self._n_qubits, intercept_probability=alpha)
+            protocol = create_protocol(
+                self._qkd_backend,
+                sample_fraction=self._sample_fraction,
+                seed_sequence=qkd_seed_sequence(self._experiment_seed, server_round, client.cid),
+            )
+            result: QKDResult = protocol.run_exchange(n_qubits=self._n_qubits, channel=channel)
             qber_per_client[client.cid] = result.qber
+            # Only `qber` (the sampled estimate) drives the controller. The sample size/errors are
+            # what a real system observes; `sim_only_true_qber` is simulation ground truth, logged
+            # to measure estimator error.
+            qkd_details[client.cid] = {
+                "qber_sample_size": result.metadata.get("qber_sample_size"),
+                "qber_sample_errors": result.metadata.get("qber_sample_errors"),
+                "n_sifted": result.n_sifted,
+                "sim_only_true_qber": result.metadata.get("sim_only_true_qber"),
+            }
 
         system_qber = max(qber_per_client.values()) if qber_per_client else 0.0
 
@@ -199,6 +217,7 @@ class EveFLStrategy(Strategy):
         self._round_state = state
         self._round_system_qber = system_qber
         self._round_qber_per_client = qber_per_client
+        self._round_qkd_details = qkd_details
 
         if transition.changed:
             log.warning(
@@ -243,6 +262,7 @@ class EveFLStrategy(Strategy):
             "system_qber": system_qber,
             "intercept_probability": self._round_intercept_probability,
             "qber_per_client": dict(self._round_qber_per_client),
+            "qkd_per_client": {cid: dict(d) for cid, d in self._round_qkd_details.items()},
             "learning_rate": self._round_learning_rate,
             "n_results": len(results),
             "n_failures": len(failures),

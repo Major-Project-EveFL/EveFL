@@ -65,12 +65,13 @@ class _QberEqualsAlpha:
     def __init__(self, *args, **kwargs):
         pass
 
-    def run_exchange(self, n_qubits, intercept_probability=0.0):
+    def run_exchange(self, n_qubits, intercept_probability=0.0, *, channel=None):
+        intercept_probability = channel.intercept_probability if channel else intercept_probability
         return QKDResult([], intercept_probability, n_qubits, 0, intercept_probability, intercept_probability > 0)
 
 
 def _round_config(monkeypatch, strategy_kwargs, server_round, alpha):
-    monkeypatch.setattr(strategy_module, "BB84Protocol", _QberEqualsAlpha)
+    monkeypatch.setattr(strategy_module, "create_protocol", lambda *args, **kwargs: _QberEqualsAlpha())
     init = ndarrays_to_parameters([np.zeros(2, np.float32)])
     strategy = EveFLStrategy(initial_parameters=init, n_qubits=8, intercept_probability=alpha, **strategy_kwargs)
     proxies = [_Proxy(str(i)) for i in range(3)]

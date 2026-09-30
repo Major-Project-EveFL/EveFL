@@ -19,11 +19,11 @@ from qiskit import QuantumCircuit
 from evefl.quantum.bb84 import BB84Protocol
 
 
-def run_trials(n_qubits: int, eavesdropper_active: bool, n_trials: int = 10) -> list[float]:
+def run_trials(n_qubits: int, intercept_probability: float, n_trials: int = 10) -> list[float]:
     qbers = []
     for trial in range(n_trials):
         protocol = BB84Protocol(seed=trial)  # different seed per trial
-        result = protocol.run_exchange(n_qubits=n_qubits, eavesdropper_active=eavesdropper_active)
+        result = protocol.run_exchange(n_qubits=n_qubits, intercept_probability=intercept_probability)
         qbers.append(result.qber)
     return qbers
 
@@ -62,10 +62,10 @@ if __name__ == "__main__":
 
     for n_qubits in (200, 500, 1000):
         print(f"--- n_qubits = {n_qubits} ---")
-        no_eve_qbers = run_trials(n_qubits, eavesdropper_active=False)
+        no_eve_qbers = run_trials(n_qubits, intercept_probability=0.0)
         print_summary("No eavesdropper", no_eve_qbers, expected="~0% (ideal channel)")
 
-        eve_qbers = run_trials(n_qubits, eavesdropper_active=True)
+        eve_qbers = run_trials(n_qubits, intercept_probability=1.0)
         print_summary(
             "Intercept-resend eavesdropper",
             eve_qbers,

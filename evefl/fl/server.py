@@ -65,6 +65,8 @@ from evefl.fl.model import build_resnet18, describe_initialisation
 from evefl.fl.runner import build_local_client_proxies, run_sequential_fl
 from evefl.fl.strategy import DEFAULT_CAUTION_LR_MULTIPLIER, EveFLStrategy
 from evefl.orchestration.state_machine import StateThresholds
+from evefl.quantum.config import PRESETS, QKDConfig
+from evefl.quantum.factory import DEFAULT_BACKEND, available_backends
 
 log = logging.getLogger("evefl.fl.server")
 
@@ -129,6 +131,10 @@ def create_strategy(
     n_qubits: int,
     num_clients: int,
     evaluate_fn=None,
+    qkd_backend: str = DEFAULT_BACKEND,
+    sample_fraction: float = 0.25,
+    bit_flip_probability: float = 0.0,
+    experiment_seed: int = 0,
     base_lr: Optional[float] = None,
     num_rounds: Optional[int] = None,
     caution_lr_multiplier: float = DEFAULT_CAUTION_LR_MULTIPLIER,
@@ -146,6 +152,10 @@ def create_strategy(
         base_lr=base_lr,
         num_rounds=num_rounds,
         caution_lr_multiplier=caution_lr_multiplier,
+        qkd_backend=qkd_backend,
+        sample_fraction=sample_fraction,
+        bit_flip_probability=bit_flip_probability,
+        experiment_seed=experiment_seed,
     )
 
 
@@ -171,6 +181,10 @@ def run_experiment(
     lr: float = DEFAULT_LR,
     caution_lr_multiplier: float = DEFAULT_CAUTION_LR_MULTIPLIER,
     weight_decay: float = DEFAULT_WEIGHT_DECAY,
+    qkd_backend: str = DEFAULT_BACKEND,
+    sample_fraction: float = 0.25,
+    bit_flip_probability: float = 0.0,
+    allow_small_sample: bool = False,
     intercept_probability_schedule: Optional[Callable[[int], float]] = None,
     eval_every_n_rounds: int = 1,
     run_federated_evaluate: bool = True,
@@ -184,6 +198,9 @@ def run_experiment(
     round — see `ATTACK_SCHEDULES["demo"]` for a schedule tuned to
     visibly hit all three security states in one short run.
     """
+    qkd_config = QKDConfig(qkd_backend, n_qubits, sample_fraction, bit_flip_probability)
+    qkd_config.validate(allow_small_sample=allow_small_sample)  # refuse meaningless QKD settings up front
+
     set_global_seed(seed)
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -212,6 +229,10 @@ def run_experiment(
         n_qubits=n_qubits,
         num_clients=num_clients,
         evaluate_fn=evaluate_fn,
+        qkd_backend=qkd_backend,
+        sample_fraction=sample_fraction,
+        bit_flip_probability=bit_flip_probability,
+        experiment_seed=seed,
         base_lr=lr,
         num_rounds=num_rounds,
         caution_lr_multiplier=caution_lr_multiplier,
@@ -246,6 +267,7 @@ def run_experiment(
         round_logs=strategy.round_logs,
         n_failures=len(history.failures),
         init_weights=init_weights,
+        qkd=qkd_config.to_dict(),
         optimizer={
             "name": "adamw",
             "lr": lr,
@@ -281,6 +303,7 @@ def build_experiment_log(
     n_failures: int,
     init_weights: Dict[str, Any],
     optimizer: Optional[Dict[str, Any]] = None,
+    qkd: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     state_counts: Dict[str, int] = {}
     for r in round_logs:
@@ -298,6 +321,7 @@ def build_experiment_log(
         "pretrained": init_weights["pretrained"],
         "init_weights_sha256": init_weights["sha256"],
         "optimizer": optimizer,
+        "qkd": qkd,
     }
     config_hash = hashlib.sha256(json.dumps(config, sort_keys=True).encode("utf-8")).hexdigest()[:16]
 
@@ -329,7 +353,18 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--num-rounds", type=int, default=12)
     p.add_argument("--local-epochs", type=int, default=1)
     p.add_argument("--batch-size", type=int, default=16)
-    p.add_argument("--qubits", type=int, default=512, dest="n_qubits")
+    p.add_argument("--qubits", type=int, default=PRESETS["lite"]["n_qubits"], dest="n_qubits",
+                    help="Qubits per BB84 exchange. The QBER sample holds ~qubits*sample_fraction/2 bits; "
+                         "runs with an expected sample under 100 are refused (see --allow-small-sample).")
+    p.add_argument("--sample-fraction", type=float, default=PRESETS["lite"]["sample_fraction"],
+                    help="Fraction of the sifted key publicly compared to estimate QBER.")
+    p.add_argument("--qkd-backend", type=str, default=DEFAULT_BACKEND, choices=available_backends(),
+                    help="bb84_numpy: fast and exact (default). bb84: gate-level Qiskit, seconds per exchange.")
+    p.add_argument("--bit-flip-probability", type=float, default=0.0,
+                    help="Baseline channel noise: independent bit flip on the receiver's result "
+                         "(expected QBER = e + (1-2e)*alpha/4).")
+    p.add_argument("--allow-small-sample", action="store_true",
+                    help="Run even though the QBER sample is tiny (results are meaningless; demos only).")
     p.add_argument("--intercept-probability", type=float, default=0.0,
                     help="Fixed Eve intercept-resend probability. Ignored if --attack-schedule is set.")
     p.add_argument("--attack-schedule", type=str, default=None, choices=list(ATTACK_SCHEDULES.keys()),
@@ -395,6 +430,10 @@ def main(argv=None) -> None:
         output_path=args.output,
         pretrained=args.pretrained,
         pretrained_weights=args.pretrained_weights,
+        qkd_backend=args.qkd_backend,
+        sample_fraction=args.sample_fraction,
+        bit_flip_probability=args.bit_flip_probability,
+        allow_small_sample=args.allow_small_sample,
         lr=args.lr,
         caution_lr_multiplier=args.caution_lr_multiplier,
         weight_decay=args.weight_decay,

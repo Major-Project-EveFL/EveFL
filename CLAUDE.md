@@ -27,7 +27,10 @@ update `docs/04` when you fix one.
 - Novelty citations (QKDFL, FedSec) are unverified. Do not rely on them without checking the DOI.
 
 ## Layout
-- `evefl/quantum/` BB84 (Qiskit Aer) + Eve intercept-resend (`base.py` QKDProtocol ABC)
+- `evefl/quantum/` `base.py` (QKDProtocol ABC, `ChannelModel`: Eve alpha + bit-flip noise e, QBER = e+(1-2e)alpha/4),
+  `bb84_numpy.py` (fast, exact, default), `bb84.py` (Qiskit reference, slow), `seeding.py` (independent streams
+  from experiment seed/round/client), `config.py` (refuses QBER samples under ~100 bits), `validation.py`. Only `qber`
+  (a sample estimate) may drive the controller; `sim_only_*` metadata is simulation ground truth.
 - `evefl/crypto/` `classical.py` (HKDF + AES-256-GCM), `ckks.py` (TenSEAL), `groth16.py` + `circuits/` (norm proof)
 - `evefl/orchestration/state_machine.py` — pure logic, must NOT import ML or quantum code
 - `evefl/fl/` `model.py`, `dataset.py` (Dirichlet partition), `client.py`, `strategy.py` (`EveFLStrategy`),

@@ -31,6 +31,18 @@ Status: `[ ]` open, `[~]` code done / paper text pending, `[x]` paper updated.
   (Adam moments are not carried across rounds): say so. The old code actually ran Adam at 1e-4, so
   any earlier Kaggle numbers used a different setting.
 
+- [~] **Channel and noise model (Phase 1).** Intercept-resend Eve with probability alpha plus a
+  bit-flip channel with probability e on Bob's result (applied after Eve), so the expected QBER is
+  `e + (1 - 2e) * alpha / 4` (not alpha/4). Say it is a bit-flip model, not depolarizing. The
+  simulator is exact (no approximation) and was cross-validated against gate-level Qiskit
+  (`docs/validation/backend_crosscheck.json`).
+- [ ] **Sample size (Phase 1).** n_qubits and sample_fraction are explicit experiment parameters,
+  recorded per run. The headline setting comes from the sample-size sweep with a pre-registered
+  selection rule (docs/06); state the rule, the sweep, and the limitation that a 3% noise baseline
+  sits near the 5% boundary (persistent false CAUTION there is expected; dynamic thresholds are the
+  proper fix, verify the Zhang et al. citation). Notebooks that used 16 or 64 qubits (QBER sample
+  of 2 to 8 bits) said nothing about the controller.
+
 ## Claims that are not measured yet
 - [ ] **Measured vs projected labels.** Every Section VIII number (AUC, MIA, overhead, Table IV)
   is projected. Label each "projected" or replace it with a measured value from a results file.

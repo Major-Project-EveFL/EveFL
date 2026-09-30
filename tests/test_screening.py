@@ -134,7 +134,8 @@ class _CautionProtocol:
     def __init__(self, *args, **kwargs):
         pass
 
-    def run_exchange(self, n_qubits, intercept_probability=0.0):
+    def run_exchange(self, n_qubits, intercept_probability=0.0, *, channel=None):
+        intercept_probability = channel.intercept_probability if channel else intercept_probability
         return QKDResult([], 0.08, n_qubits, 0, intercept_probability, intercept_probability > 0)
 
 
@@ -144,7 +145,7 @@ def _fit_res(weights, n=10):
 
 
 def _caution_round(monkeypatch, global_, updates):
-    monkeypatch.setattr(strategy_module, "BB84Protocol", _CautionProtocol)
+    monkeypatch.setattr(strategy_module, "create_protocol", lambda *args, **kwargs: _CautionProtocol())
     strategy = EveFLStrategy(initial_parameters=ndarrays_to_parameters(global_), n_qubits=8)
     proxies = [_Proxy(str(i)) for i in range(3)]
     fit_ins = strategy.configure_fit(1, ndarrays_to_parameters(global_), _Manager(proxies))

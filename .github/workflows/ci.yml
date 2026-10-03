@@ -67,6 +67,7 @@ jobs:
           HYPOTHESIS_PROFILE: ci
         run: >
           python -m pytest -q tests/test_state_machine.py tests/test_hysteresis.py tests/test_policy.py
+          tests/test_policy_modes.py
           --cov=evefl.orchestration.state_machine --cov=evefl.orchestration.policy
           --cov-branch --cov-report=term-missing --cov-fail-under=100
 

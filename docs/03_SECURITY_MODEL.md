@@ -35,6 +35,13 @@ Out of scope: DoS, brute force, endpoint compromise, side channels in the simula
    round, zeroize afterwards. Reject replayed rounds.
 8. LOCKDOWN: discard that exchange's key material entirely and run a new exchange next round.
 
+## Selective exclusion as an attack lever (per_client mode)
+Out of scope otherwise (denial of service), but in `per_client` mode an adversary who disturbs one link CHOOSES which
+hospital's data drops out of training, biasing the model under non-IID data and, below `min_clients`, halting training.
+Mitigations are reporting, not prevention: per-client participation counts are logged every round and must be reported
+with per-client performance in the Phase 5 experiments. Excluding a hospital is never free; its cost is measured, not
+assumed. With only 2 updates left, update screening is inactive (needs >= 3), a direct cost of exclusion.
+
 ## Implemented pipeline and finite-key accounting (Phase 1, step 3)
 `evefl/quantum/postprocess.py` implements steps 1 to 5 above with the Tomamichel et al. 2012 finite-key bound
 (Supplementary Theorem 2, verified against the paper; assumptions in the module docstring and

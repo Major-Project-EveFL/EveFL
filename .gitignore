@@ -46,3 +46,7 @@ wandb/
 
 .venv312/
 results/
+
+# coverage
+.coverage
+htmlcov/

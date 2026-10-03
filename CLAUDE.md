@@ -100,6 +100,10 @@ runner, evaluation, server) | evefl/config/settings.yaml | evefl/registry.py | d
 scripts/ (smoke_test, run_experiments, audit_partition, qber_sweep, table3_theorem1, validate_backends,
 summarize_run, cache_pretrained_weights) | docs/ (01-06, paper_patches/, validation/, KAGGLE_RUNBOOK.md) | tests/
 Only `qber` (a sampled estimate) may drive the controller; `sim_only_*` metadata is simulation ground truth.
+Data split: P0-4 is verified on the real ChestX-ray14 metadata (`docs/validation/partition_audit_real.json`: seed 42, all
+overlaps 0). `partition_meta.json` stores `index_sha256` for every index file (`scripts/audit_partition.py` verifies it).
+Model selection uses the VALIDATION split's `macro_auc_roc_excl_thin` (classes with < 20 positives are "thin"; rule in
+docs/06); the test split is for the final report only.
 
 ## Style
 Type hints everywhere, dataclasses or pydantic for data, no bare `except`, structured logging

@@ -15,7 +15,7 @@ Fix in order. Each fix needs a test.
   bound relative to the median.
 - P0-3 [FIXED: structured per-round macro/per-class AUC in results JSON via the sequential runner, LOCKDOWN rounds included, skipped classes listed; tests/test_evaluation.py] No evaluation. `evaluate_fn=None`, client `evaluate()` returns NaN. Add server-side
   macro AUC-ROC on the held-out test split (skip classes with no positives), plus per-class AUC.
-- P0-4 evefl/fl/dataset.py `_dirichlet_partition`. A multi-label image is added to every client
+- P0-4 [FIXED and VERIFIED on the real data: evefl/fl/partition.py, patient-level disjoint train/val/test split, tests/test_partition.py, tests/test_validation_split.py. The Kaggle audit (seed 42) found 0 overlapping patients and images in all ten pairs, totals match the dataset: docs/validation/partition_audit_real.json. Index files carry SHA-256 in partition_meta.json from now on (the audited run predates the hashes; a rerun on Kaggle should compare counts). Open: the authors still have to edit the paper text, see docs/paper_patches/partition_scheme.md. Thin validation class (Hernia, 10 positives): selection rule pre-registered in docs/06] evefl/fl/dataset.py `_dirichlet_partition`. A multi-label image is added to every client
   that receives any of its positive classes, so partitions overlap. Splitting is per image, but
   ChestX-ray14 has multiple images per patient, so patients leak across train, test and clients.
   Also the code (class-wise Dirichlet) differs from the paper's description (per-sample p~Dir).

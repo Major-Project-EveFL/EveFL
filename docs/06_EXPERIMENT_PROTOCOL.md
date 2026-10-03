@@ -170,3 +170,30 @@ the run: for a static Eve with alpha >= 0.44 the global modes discard almost eve
 hospitals training; below alpha ~0.3 the three modes barely differ.
 
 Outputs: `docs/validation/hysteresis_sweep.json` (all cells, config, seeds) and an ADR (docs/adr/0002).
+
+## Pre-registered: model-selection rule and thin classes (P0-4 validation split)
+Written 2026-10-03, before any model was tuned or selected on the validation split (no trained-model result exists yet).
+Motivated by the real-data partition audit (`docs/validation/partition_audit_real.json`, seed 42, alpha 0.5): the validation
+split has only 10 Hernia positives, so its per-class AUC is very noisy and would steer the macro AUC.
+
+1. **Which split decides what.** Every choice made by looking at performance (which round to report, learning rate, local
+   epochs, any other hyperparameter) uses the VALIDATION split only. The test split is read for the final report only.
+   Neither the partition seed nor the validation fraction may be changed after seeing validation or test results.
+2. **Thin class.** A class that is scored (both labels present) but has fewer than 20 positives, or fewer than 20 negatives,
+   in the evaluated split is "thin". The value 20 is a convention fixed here before tuning; it is not a power calculation.
+   Thin classes are computed from the data of each split (`thin_classes` in every `val_eval` / `server_eval` entry); they
+   are never hard-coded. On the audited real split the only thin class is Hernia in validation (10 positives); the test
+   split has 53 Hernia positives and no thin class.
+3. **Selection metric.** `macro_auc_roc_excl_thin` of `val_eval`: the mean AUC over scored, non-thin classes. The all-class
+   `macro_auc_roc` and every per-class AUC (thin classes included) are written next to it and reported; only the selection
+   metric drops thin classes. If no class qualifies the metric is NaN and the run cannot be selected on it.
+4. **Choosing a round or a setting.** Pick the maximum of the selection metric; ties go to the earlier round (fewer rounds of
+   communication) or, across settings, to the cheaper setting. Absent a stated reason the reported model is the final-round
+   model; selecting an earlier round by this metric is allowed and must be named as such in the results.
+5. **Final report (test split).** Primary number: macro AUC over all scored classes with the count of scored classes stated;
+   secondary: `macro_auc_roc_excl_thin` and the full per-class table. Report the thin classes explicitly. Hernia in
+   hospital 0 (5 positives) is the non-IID skew by design, not a defect, and no rule applies to it.
+6. **Deviations** from this rule are listed in this file with the reason and date, as for the sweeps above.
+
+Implementation: `evefl/fl/evaluation.py` (`MIN_POSITIVES_FOR_SELECTION = 20`, `_support_summary`), shown by
+`scripts/summarize_run.py` as the `val_AUC*` column.

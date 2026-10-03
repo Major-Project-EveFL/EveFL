@@ -9,9 +9,9 @@ Status: `[ ]` open, `[~]` code done / paper text pending, `[x]` paper updated.
 ## Code changes the paper must describe
 - [~] **Partition scheme (P0-4).** Patient-level, disjoint split; dominant label = rarest positive
   label, "No Finding" only if none; Dirichlet(0.5) over groups; test = random 10% of patients.
-  Replaces the per-sample p ~ Dir(alpha) description. Patch text: `partition_scheme.md`
-  (on branch `fix/p0-4-patient-level-split` until merged). Report audited overlap counts (all 0)
-  and hospital sizes from the Kaggle audit.
+  Replaces the per-sample p ~ Dir(alpha) description. Patch text: `partition_scheme.md`, which already
+  carries the audited real-data counts (all overlaps 0; `docs/validation/partition_audit_real.json`).
+  Paper text still to be edited by the authors.
 - [~] **Anomaly rule (P0-2).** Old: `mean + 2*std` on full-parameter norms. New: update-delta
   norms, flag if norm > median + k * max(1.4826*MAD, rel_floor*median), k=3, rel_floor=0.25, needs
   >= 3 clients. Say why (mean+2std cannot fire with 3 clients: max z = 1.155; MAD floor for

@@ -1,0 +1,86 @@
+{
+  "provenance": {
+    "label": "measured (real ChestX-ray14 metadata, run on Kaggle by the team)",
+    "dataset": "NIH ChestX-ray14 (Data_Entry_2017.csv)",
+    "kaggle_dataset_path": "/kaggle/input/datasets/nih-chest-xrays/data",
+    "dataset_rows": 112120,
+    "dataset_patients": 30805,
+    "code_commit_audited": "9873d10 (branch fix/p0-4-patient-level-split, before main was merged into it)",
+    "kaggle_runtime": "Python 3.13.15, torch 2.11.0+cu128, torchvision 0.26.0+cu128 (code imported via sys.path; requirements.txt did not install there)",
+    "parameters": {
+      "n_clients": 3,
+      "alpha": 0.5,
+      "seed": 42,
+      "test_fraction": 0.1,
+      "val_fraction": 0.1,
+      "subset_fraction": 1.0
+    },
+    "recorded_in_repo_on": "2026-10-03",
+    "audit_run_date": "not recorded; the run preceded the handoff of 2026-10",
+    "source": "transcript pasted by the team into the session; verbatim copy in handoff/kaggle_audit_output.txt",
+    "contains_patient_ids": false,
+    "index_sha256": null,
+    "index_sha256_note": "partition_meta.json of this run predates the index-file hashes, so the saved index files were not hashed. To prove reproducibility, rerun partition_and_save with these parameters on current main and compare every number below; the new run also records index_sha256."
+  },
+  "scheme": "patient_level_dirichlet_rarest_label",
+  "result": "OK - disjoint at patient and image level",
+  "overlaps_all_zero": true,
+  "overlaps": {
+    "hospital_0~hospital_1": {"patients": 0, "images": 0},
+    "hospital_0~hospital_2": {"patients": 0, "images": 0},
+    "hospital_0~test": {"patients": 0, "images": 0},
+    "hospital_0~val": {"patients": 0, "images": 0},
+    "hospital_1~hospital_2": {"patients": 0, "images": 0},
+    "hospital_1~test": {"patients": 0, "images": 0},
+    "hospital_1~val": {"patients": 0, "images": 0},
+    "hospital_2~test": {"patients": 0, "images": 0},
+    "hospital_2~val": {"patients": 0, "images": 0},
+    "test~val": {"patients": 0, "images": 0}
+  },
+  "totals_check": {
+    "patients_sum": 30805,
+    "patients_expected": 30805,
+    "images_sum": 112120,
+    "images_expected": 112120
+  },
+  "class_order": [
+    "Atelectasis", "Cardiomegaly", "Effusion", "Infiltration", "Mass", "Nodule", "Pneumonia",
+    "Pneumothorax", "Consolidation", "Edema", "Emphysema", "Fibrosis", "Pleural_Thickening", "Hernia"
+  ],
+  "n_patients_per_client": [12869, 6470, 5306],
+  "n_patients_test": 3080,
+  "n_patients_val": 3080,
+  "hospital_sizes": [46975, 18018, 25136],
+  "n_test": 10889,
+  "n_val": 11102,
+  "dominant_group_counts": {
+    "-1": 13109, "0": 1007, "1": 852, "2": 751, "3": 2298, "4": 843, "5": 1006, "6": 810,
+    "7": 576, "8": 564, "9": 515, "10": 717, "11": 772, "12": 717, "13": 108
+  },
+  "stats": {
+    "hospital_0": {
+      "images": 46975, "patients": 12869, "no_finding_share": 0.5606599254922832,
+      "positives_per_class": [4385, 1868, 6133, 8172, 1820, 2339, 752, 1850, 1975, 1433, 1031, 745, 1109, 5]
+    },
+    "hospital_1": {
+      "images": 18018, "patients": 6470, "no_finding_share": 0.5891885891885892,
+      "positives_per_class": [2155, 94, 1301, 2922, 1009, 913, 176, 730, 462, 140, 215, 67, 287, 86]
+    },
+    "hospital_2": {
+      "images": 25136, "patients": 5306, "no_finding_share": 0.45154360280076383,
+      "positives_per_class": [2773, 360, 3434, 5036, 1834, 1861, 245, 1705, 1389, 268, 711, 553, 1351, 73]
+    },
+    "test": {
+      "images": 10889, "patients": 3080, "no_finding_share": 0.553402516300854,
+      "positives_per_class": [1171, 237, 1171, 1845, 545, 585, 118, 484, 423, 233, 295, 131, 319, 53]
+    },
+    "val": {
+      "images": 11102, "patients": 3080, "no_finding_share": 0.5433255269320844,
+      "positives_per_class": [1075, 217, 1278, 1919, 574, 633, 140, 533, 418, 229, 264, 190, 319, 10]
+    }
+  },
+  "observations": {
+    "thin_classes": "Validation Hernia has 10 positives (below the 20-positive threshold in docs/06, section 'Model-selection rule'). Hospital 0 has 5 Hernia positives.",
+    "non_iid": "Hospital 0 holds 1,868 Cardiomegaly positives against 94 in hospital 1: the non-IID skew is by design (Dirichlet alpha = 0.5), not a bug."
+  }
+}

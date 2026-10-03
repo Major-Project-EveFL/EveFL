@@ -256,6 +256,16 @@ def run_sequential_fl(
             _attach_eval_to_round_log(strategy, server_round, "server_eval", loss, metrics)
 
         # ------------------------------------------------------------
+        # VALIDATION EVAL (model selection; the test split above is for reporting only)
+        # ------------------------------------------------------------
+        evaluate_validation = getattr(strategy, "evaluate_validation", None)
+        val_eval = evaluate_validation(server_round, current_parameters) if evaluate_validation else None
+        if val_eval is not None:
+            val_loss, val_metrics = val_eval
+            log.info("[Round %d] validation eval: loss=%.4f metrics=%s", server_round, val_loss, val_metrics)
+            _attach_eval_to_round_log(strategy, server_round, "val_eval", val_loss, val_metrics)
+
+        # ------------------------------------------------------------
         # FEDERATED EVAL (optional, per-client evaluate())
         # ------------------------------------------------------------
         if run_federated_evaluate:

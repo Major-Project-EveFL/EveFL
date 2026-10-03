@@ -94,7 +94,7 @@ def generate_synthetic_chestxray(
         # Random 1-3 labels
         n_labels = rng.integers(1, 4)
         finding_labels = "|".join(rng.choice(labels, size=n_labels, replace=False))
-        rows.append({"Image Index": img_name, "Finding Labels": finding_labels})
+        rows.append({"Image Index": img_name, "Finding Labels": finding_labels, "Patient ID": i // 3})
 
     df = pd.DataFrame(rows)
     df.to_csv(output_dir / "Data_Entry_2017.csv", index=False)

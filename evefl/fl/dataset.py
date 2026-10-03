@@ -1,6 +1,6 @@
 """
-NIH ChestX-ray14 dataset loading and Dirichlet non-IID partitioning
-across simulated hospital clients.
+NIH ChestX-ray14 dataset loading and patient-level Dirichlet non-IID
+partitioning across simulated hospital clients (see partition.py).
 
 Expected layout on disk:
     <data_root>/
@@ -13,7 +13,8 @@ Run `partition_and_save()` ONCE before training. It writes:
         hospital_0/indices.npy
         hospital_1/indices.npy
         hospital_2/indices.npy
-        test/indices.npy           # held-out IID test split
+        test/indices.npy           # held-out IID test split (disjoint patients): final report ONLY
+        val/indices.npy            # held-out validation split (disjoint patients): model selection
         partition_meta.json
 
 Nothing quantum here — this is standard PyTorch data loading.
@@ -21,6 +22,7 @@ Nothing quantum here — this is standard PyTorch data loading.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from pathlib import Path
@@ -33,12 +35,38 @@ from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 
 from evefl.fl.model import CHESTXRAY_LABELS, NUM_CLASSES, get_eval_transform, get_train_transform
+from evefl.fl.partition import audit_partition, split_by_patient
 
 log = logging.getLogger(__name__)
 
 TEST_FRACTION = 0.10
+VAL_FRACTION = 0.10  # patients held out for model selection (the test set is for the final report only)
 N_HOSPITALS = 3
 DEFAULT_BATCH_SIZE = 32
+
+
+def parse_label_matrix(finding_labels) -> np.ndarray:
+    """Multi-hot [N, 14] float32 matrix from the CSV "Finding Labels" column
+    ("No Finding" and unknown strings map to an all-zero row)."""
+    label_matrix = np.zeros((len(finding_labels), NUM_CLASSES), dtype=np.float32)
+    for row_i, finding_str in enumerate(finding_labels):
+        for label in str(finding_str).split("|"):
+            label = label.strip()
+            if label in CHESTXRAY_LABELS:
+                label_matrix[row_i, CHESTXRAY_LABELS.index(label)] = 1.0
+    return label_matrix
+
+
+def load_metadata(data_root: str | Path) -> pd.DataFrame:
+    csv_path = Path(data_root) / "Data_Entry_2017.csv"
+    if not csv_path.exists():
+        raise FileNotFoundError(
+            f"Metadata CSV not found at {csv_path}. Download ChestX-ray14 "
+            "from https://nihcc.app.box.com/v/ChestXray-NIHCC (or use the "
+            "Kaggle-hosted copy)."
+        )
+    return pd.read_csv(csv_path)
+
 
 
 # ---------------------------------------------------------------------------
@@ -75,22 +103,8 @@ class ChestXray14Dataset(Dataset):
         self.data_root = Path(data_root)
         self.transform = transform or get_train_transform()
 
-        csv_path = self.data_root / "Data_Entry_2017.csv"
-        if not csv_path.exists():
-            raise FileNotFoundError(
-                f"Metadata CSV not found at {csv_path}. Download ChestX-ray14 "
-                "from https://nihcc.app.box.com/v/ChestXray-NIHCC (or use the "
-                "Kaggle-hosted copy)."
-            )
-
-        df = pd.read_csv(csv_path)
-
-        label_matrix = np.zeros((len(df), NUM_CLASSES), dtype=np.float32)
-        for row_i, finding_str in enumerate(df["Finding Labels"]):
-            for label in str(finding_str).split("|"):
-                label = label.strip()
-                if label in CHESTXRAY_LABELS:
-                    label_matrix[row_i, CHESTXRAY_LABELS.index(label)] = 1.0
+        df = load_metadata(self.data_root)
+        label_matrix = parse_label_matrix(df["Finding Labels"])
 
         self._image_names: np.ndarray = df["Image Index"].values
         self._labels: torch.Tensor = torch.from_numpy(label_matrix)
@@ -141,55 +155,8 @@ class ChestXray14Dataset(Dataset):
 
 
 # ---------------------------------------------------------------------------
-# Dirichlet non-IID partitioning
+# Patient-level Dirichlet non-IID partitioning (scheme: see partition.py)
 # ---------------------------------------------------------------------------
-
-def _dirichlet_partition(
-    labels: np.ndarray,
-    n_clients: int,
-    alpha: float,
-    rng: np.random.Generator,
-) -> list[list[int]]:
-    """
-    Partition sample indices across n_clients using a class-wise Dir(alpha).
-
-    For each of the 14 pathology classes, positive samples are split
-    across clients with proportions drawn from Dir(alpha) — lower alpha
-    means more skewed (one hospital sees almost all Cardiomegaly cases,
-    say), higher alpha approaches IID. "No Finding" samples (no positive
-    label at all) are distributed uniformly since there's no class
-    signal to skew them by.
-    """
-    n_samples = labels.shape[0]
-    n_classes = labels.shape[1]
-    client_idx: list[set] = [set() for _ in range(n_clients)]
-
-    for c in range(n_classes):
-        positive_indices = np.where(labels[:, c] == 1)[0]
-        if len(positive_indices) == 0:
-            continue
-
-        rng.shuffle(positive_indices)
-        proportions = rng.dirichlet(alpha * np.ones(n_clients))
-
-        counts = (proportions * len(positive_indices)).astype(int)
-        counts[-1] = len(positive_indices) - counts[:-1].sum()  # remainder to last client
-
-        start = 0
-        for client_id, count in enumerate(counts):
-            end = start + count
-            for idx in positive_indices[start:end]:
-                client_idx[client_id].add(int(idx))
-            start = end
-
-    all_assigned = set().union(*client_idx) if client_idx else set()
-    unassigned = [i for i in range(n_samples) if i not in all_assigned]
-    rng.shuffle(unassigned)
-    for i, idx in enumerate(unassigned):
-        client_idx[i % n_clients].add(idx)
-
-    return [sorted(s) for s in client_idx]
-
 
 def partition_and_save(
     data_root: str | Path,
@@ -200,73 +167,140 @@ def partition_and_save(
     test_fraction: float = TEST_FRACTION,
     seed: int = 42,
     subset_fraction: float = 1.0,
+    val_fraction: float = VAL_FRACTION,
 ) -> None:
     """
-    Partition ChestX-ray14 into n_clients non-IID hospital splits + a
-    shared IID test split, and write everything to disk as .npy index
-    files (fast, reproducible re-loading; run this once per experiment
-    config, not once per round).
+    Split ChestX-ray14 BY PATIENT into n_clients disjoint non-IID hospital
+    splits plus a disjoint IID test split, and write row indices to disk as
+    .npy files (run once per experiment config, not once per round).
+
+    Requires the "Patient ID" column of Data_Entry_2017.csv. The scheme
+    (rarest-positive-label groups, Dirichlet over hospitals) is documented in
+    evefl/fl/partition.py. The result is audited for overlap before writing;
+    any overlap raises instead of saving.
 
     Args:
-        subset_fraction: use only this fraction of the full dataset —
-            e.g. 0.02-0.05 for a quick end-to-end smoke test on Kaggle,
-            1.0 for a full run.
+        subset_fraction: use only this fraction of PATIENTS, e.g. 0.02-0.05 for
+            a quick end-to-end run on Kaggle, 1.0 for a full run.
     """
-    data_root = Path(data_root)
     partition_root = Path(partition_root)
     partition_root.mkdir(parents=True, exist_ok=True)
 
     log.info("Loading ChestX-ray14 metadata from %s ...", data_root)
-    labels_only = ChestXray14Dataset(data_root, transform=get_train_transform())
-    labels_np = labels_only.labels.numpy()
-    n_total = len(labels_only)
+    df = load_metadata(data_root)
+    if "Patient ID" not in df.columns:
+        raise KeyError(
+            "Data_Entry_2017.csv has no 'Patient ID' column; a patient-level split needs it."
+        )
+    patient_ids = df["Patient ID"].to_numpy()
+    labels = parse_label_matrix(df["Finding Labels"])
 
-    rng = np.random.default_rng(seed)
-    all_indices = np.arange(n_total)
-    rng.shuffle(all_indices)
+    split = split_by_patient(
+        patient_ids, labels,
+        n_clients=n_clients, alpha=alpha, test_fraction=test_fraction,
+        seed=seed, subset_fraction=subset_fraction, val_fraction=val_fraction,
+    )
+    audit = audit_partition(
+        patient_ids, labels, split.client_indices, split.test_indices,
+        split.val_indices if val_fraction > 0 else None,
+    )
+    if not audit["ok"]:
+        raise RuntimeError(f"Patient-level split is not disjoint: {audit['overlaps']}")
 
-    if subset_fraction < 1.0:
-        n_keep = max(1, int(n_total * subset_fraction))
-        all_indices = all_indices[:n_keep]
-        log.info("Subset mode: using %.1f%% of data (%d/%d samples).",
-                  subset_fraction * 100, n_keep, n_total)
-
-    n_test = int(len(all_indices) * test_fraction)
-    test_indices = all_indices[:n_test]
-    trainval_idx = all_indices[n_test:]
-
-    log.info("Test set: %d samples. Partitioning %d samples across %d hospitals (alpha=%.2f)...",
-              n_test, len(trainval_idx), n_clients, alpha)
-
-    trainval_labels = labels_np[trainval_idx]
-    client_local_idx = _dirichlet_partition(trainval_labels, n_clients, alpha, rng)
-    client_global_idx = [trainval_idx[local] for local in client_local_idx]
-
-    for client_id, idx_array in enumerate(client_global_idx):
+    for client_id, idx_array in enumerate(split.client_indices):
         out_dir = partition_root / f"hospital_{client_id}"
         out_dir.mkdir(exist_ok=True)
-        np.save(out_dir / "indices.npy", np.array(idx_array))
-        log.info("Hospital %d: %d samples -> %s", client_id, len(idx_array), out_dir)
+        np.save(out_dir / "indices.npy", idx_array)
+        log.info("Hospital %d: %d images, %d patients -> %s",
+                 client_id, len(idx_array), split.n_patients_per_client[client_id], out_dir)
 
     test_dir = partition_root / "test"
     test_dir.mkdir(exist_ok=True)
-    np.save(test_dir / "indices.npy", test_indices)
-    log.info("Test set: %d samples -> %s", len(test_indices), test_dir)
+    np.save(test_dir / "indices.npy", split.test_indices)
+    log.info("Test set: %d images, %d patients -> %s",
+             len(split.test_indices), split.n_patients_test, test_dir)
+
+    if val_fraction > 0:
+        val_dir = partition_root / "val"
+        val_dir.mkdir(exist_ok=True)
+        np.save(val_dir / "indices.npy", split.val_indices)
+        log.info("Validation set: %d images, %d patients -> %s",
+                 len(split.val_indices), split.n_patients_val, val_dir)
 
     meta = {
+        "scheme": "patient_level_dirichlet_rarest_label",
         "n_clients": n_clients,
         "alpha": alpha,
         "seed": seed,
         "test_fraction": test_fraction,
+        "val_fraction": val_fraction,
+        "n_patients_val": split.n_patients_val,
+        "n_val": int(len(split.val_indices)),
         "subset_fraction": subset_fraction,
-        "n_total_used": int(len(all_indices)),
-        "n_test": int(n_test),
-        "hospital_sizes": [len(idx) for idx in client_global_idx],
+        "n_patients_total": split.n_patients_total,
+        "n_patients_used": split.n_patients_used,
+        "n_patients_test": split.n_patients_test,
+        "n_patients_per_client": split.n_patients_per_client,
+        "n_test": int(len(split.test_indices)),
+        "hospital_sizes": [int(len(idx)) for idx in split.client_indices],
+        "dominant_group_counts": {str(k): v for k, v in split.dominant_group_counts.items()},
+        "index_sha256": _index_hashes(partition_root),
+        "audit": audit,
     }
     with open(partition_root / "partition_meta.json", "w") as f:
         json.dump(meta, f, indent=2)
 
-    log.info("Partitioning complete. Metadata: %s/partition_meta.json", partition_root)
+    log.info("Partitioning complete (disjoint: %s). Metadata: %s/partition_meta.json",
+             audit["ok"], partition_root)
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for block in iter(lambda: f.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _index_hashes(partition_root: Path) -> dict:
+    """SHA-256 (hex) of every `<split>/indices.npy` under partition_root, keyed by split name."""
+    return {
+        p.parent.name: _sha256_file(p)
+        for p in sorted(partition_root.glob("*/indices.npy"))
+    }
+
+
+def verify_partition_hashes(partition_root: str | Path) -> dict:
+    """
+    Compare the index files on disk with the SHA-256 values stored in partition_meta.json.
+
+    Returns {split_name: {"expected": ..., "actual": ...}} for every split whose file is missing,
+    changed or unexpected; an empty dict means the partition is byte-identical to what was saved.
+    Raises KeyError if the metadata predates the hashes (no `index_sha256`).
+    """
+    partition_root = Path(partition_root)
+    meta = json.loads((partition_root / "partition_meta.json").read_text())
+    expected = meta["index_sha256"]
+    actual = _index_hashes(partition_root)
+    return {
+        name: {"expected": expected.get(name), "actual": actual.get(name)}
+        for name in sorted(set(expected) | set(actual))
+        if expected.get(name) != actual.get(name)
+    }
+
+
+def audit_saved_partition(data_root: str | Path, partition_root: str | Path) -> dict:
+    """Re-load a saved partition and recompute overlap counts and label stats."""
+    partition_root = Path(partition_root)
+    df = load_metadata(data_root)
+    patient_ids = df["Patient ID"].to_numpy()
+    labels = parse_label_matrix(df["Finding Labels"])
+    client_dirs = sorted(partition_root.glob("hospital_*"), key=lambda p: int(p.name.split("_")[1]))
+    client_indices = [np.load(d / "indices.npy") for d in client_dirs]
+    test_indices = np.load(partition_root / "test" / "indices.npy")
+    val_path = partition_root / "val" / "indices.npy"
+    val_indices = np.load(val_path) if val_path.exists() else None
+    return audit_partition(patient_ids, labels, client_indices, test_indices, val_indices)
 
 
 # ---------------------------------------------------------------------------
@@ -308,11 +342,15 @@ def get_test_dataloader(
     *,
     batch_size: int = 64,
     num_workers: int = 0,
+    split: str = "test",
 ) -> DataLoader:
-    idx_path = Path(partition_root) / "test" / "indices.npy"
+    """Held-out evaluation loader. `split` is "test" (final report only) or "val" (model selection)."""
+    if split not in ("test", "val"):
+        raise ValueError(f"split must be 'test' or 'val', got {split!r}")
+    idx_path = Path(partition_root) / split / "indices.npy"
     if not idx_path.exists():
         raise FileNotFoundError(
-            f"Test partition not found at {idx_path}. Run dataset.partition_and_save() first."
+            f"{split} partition not found at {idx_path}. Run dataset.partition_and_save() first."
         )
 
     indices = np.load(idx_path)

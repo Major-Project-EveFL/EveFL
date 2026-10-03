@@ -184,7 +184,7 @@ class EveFLStrategy(Strategy):
         self._round_qber_per_client: Dict[str, float] = {}
         self._round_learning_rate: Optional[float] = None
         self._round_lr_per_client: Dict[str, float] = {}
-        self._round_qkd_details: Dict[str, Dict[str, float]] = {}
+        self._round_qkd_details: Dict[str, Dict[str, Optional[float]]] = {}
         self._round_key_status: Dict[str, str] = {}
         # Global weights sent to clients this round: the reference for update-delta norms.
         self._round_global_ndarrays: List[np.ndarray] = []
@@ -228,7 +228,7 @@ class EveFLStrategy(Strategy):
 
         # -- 1. One BB84 exchange per client link, this round (excluded links too) ----------------------
         qber_per_client: Dict[str, float] = {}
-        qkd_details: Dict[str, Dict[str, float]] = {}
+        qkd_details: Dict[str, Dict[str, Optional[float]]] = {}
         alpha_per_client: Dict[str, float] = {}
         for client in clients:
             channel = self._channel_for(client.cid, server_round)

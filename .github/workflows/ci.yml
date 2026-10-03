@@ -25,7 +25,8 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-dev.txt
 
-      # Only the tools; mypy is configured to check the typed core, which has no heavy dependencies.
+      # Only the tools, no torch or flwr: this job checks the whole package with those imports treated as Any.
+      # The tests job below runs mypy again with flwr and torch installed, which is the check that sees their types.
       - run: pip install ruff==0.6.9 mypy==1.13.0 pandas-stubs==3.0.5.260914 types-PyYAML==6.0.12.20260906 numpy
 
       - run: ruff check .
@@ -52,6 +53,9 @@ jobs:
         run: |
           pip install -r requirements-dev.txt
           pip install -e .
+
+      - name: Types with flwr and torch installed (mypy evefl)
+        run: python -m mypy
 
       # --require-optional-tools turns "skipped because tool missing" into a failure, so a green
       # run means every selected test really ran. The ZK tests run in their own job below.

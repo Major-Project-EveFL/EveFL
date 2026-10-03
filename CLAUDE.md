@@ -84,8 +84,8 @@ streamlit run dashboard/app.py
 - Experiments: `--policy-mode global_binary|global|per_client` (B2/B3/B4), `--link-attack 0:0.6[:step@N|window@A-B|intermittent@P]`
   (Eve on ONE link), `--link-noise`, `--hysteresis-margin/--hysteresis-dwell`, `--min-clients`; the full channel plan and policy are
   written into the results JSON.
-- Dev tools: `pip install -r requirements-dev.txt`; `ruff check .`; `mypy` (typed core listed in pyproject; the
-  whole-package `mypy evefl` still has ~17 errors, mostly flwr typing, tracked as a separate PR).
+- Dev tools: `pip install -r requirements-dev.txt`; `ruff check .`; `mypy` (the whole `evefl` package; it passes,
+  and CI runs it in the lint job and again in the tests job with flwr and torch installed).
 - No `gh` CLI. Workflow: one branch per task, push to the `parineeta` remote
   (github.com/Parineeta-2307/EveFL_Federated_Learning), merge to main only when CI is green. Read CI results
   through the public API (`.github/workflows/ci.yml`: lint, tests, Groth16 jobs with `--require-optional-tools`,

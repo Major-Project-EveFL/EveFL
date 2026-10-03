@@ -207,12 +207,14 @@ class EveFLClient(NumPyClient):
 
         fedprox_mu = float(config.get("fedprox_mu", 0.0))
         learning_rate = float(config.get("learning_rate", self.lr))
-        metrics = _train_one_client(
+        train_metrics = _train_one_client(
             self.model, self._get_train_loader(),
             device=self.device, epochs=self.local_epochs, lr=learning_rate,
             fedprox_mu=fedprox_mu, weight_decay=self.weight_decay,
         )
-        metrics.update({"state": state, "qber": qber, "fedprox_mu": fedprox_mu, "learning_rate": learning_rate})
+        metrics: Dict[str, Scalar] = {
+            **train_metrics, "state": state, "qber": qber, "fedprox_mu": fedprox_mu, "learning_rate": learning_rate,
+        }
 
         n_examples = len(self._get_train_loader().dataset)
         return get_model_parameters(self.model), n_examples, metrics

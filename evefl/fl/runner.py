@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 from flwr.client.client import Client
 from flwr.common import (
@@ -54,7 +54,9 @@ from flwr.common import (
     ReconnectIns,
     Scalar,
 )
+from flwr.server.client_manager import ClientManager
 from flwr.server.client_proxy import ClientProxy
+from flwr.server.criterion import Criterion
 from flwr.server.strategy import Strategy
 
 log = logging.getLogger(__name__)
@@ -106,27 +108,37 @@ class LocalClientProxy(ClientProxy):
 # Fixed-membership ClientManager: same 3 hospitals every round
 # ============================================================================
 
-class SequentialClientManager:
+class SequentialClientManager(ClientManager):
     """
-    Minimal stand-in for `flwr.server.client_manager.ClientManager`.
+    Fixed-membership `flwr.server.client_manager.ClientManager`.
 
     EveFLStrategy only calls `.num_available()` and `.sample(...)` on
     whatever client_manager it's given (see `_sample_clients()` in
     strategy.py) — it never registers/unregisters clients dynamically,
     so a fixed-membership manager is all a sequential run needs.
+    `register` / `unregister` therefore raise instead of silently doing nothing.
     """
 
-    def __init__(self, proxies: List[ClientProxy]):
+    def __init__(self, proxies: Sequence[ClientProxy]):
         self._proxies: Dict[str, ClientProxy] = {p.cid: p for p in proxies}
 
     def num_available(self) -> int:
         return len(self._proxies)
 
+    def register(self, client: ClientProxy) -> bool:
+        raise RuntimeError("SequentialClientManager has fixed membership: pass all clients to the constructor.")
+
+    def unregister(self, client: ClientProxy) -> None:
+        raise RuntimeError("SequentialClientManager has fixed membership: clients cannot be unregistered.")
+
+    def wait_for(self, num_clients: int, timeout: int) -> bool:
+        return len(self._proxies) >= num_clients
+
     def sample(
         self,
         num_clients: int,
         min_num_clients: Optional[int] = None,
-        criterion=None,
+        criterion: Optional[Criterion] = None,
     ) -> List[ClientProxy]:
         proxies = list(self._proxies.values())
         if criterion is not None:
@@ -189,7 +201,7 @@ class SequentialHistory:
 
 def run_sequential_fl(
     *,
-    client_proxies: List[ClientProxy],
+    client_proxies: Sequence[ClientProxy],
     strategy: Strategy,
     num_rounds: int,
     initial_parameters: Parameters,
@@ -227,7 +239,7 @@ def run_sequential_fl(
         fit_instructions = strategy.configure_fit(server_round, current_parameters, client_manager)
 
         fit_results: List[Tuple[ClientProxy, FitRes]] = []
-        fit_failures: List[BaseException] = []
+        fit_failures: List[Union[Tuple[ClientProxy, FitRes], BaseException]] = []
 
         for proxy, fit_ins in fit_instructions:
             try:
@@ -272,7 +284,7 @@ def run_sequential_fl(
             eval_instructions = strategy.configure_evaluate(server_round, current_parameters, client_manager)
             if eval_instructions:
                 eval_results: List[Tuple[ClientProxy, EvaluateRes]] = []
-                eval_failures: List[BaseException] = []
+                eval_failures: List[Union[Tuple[ClientProxy, EvaluateRes], BaseException]] = []
 
                 for proxy, eval_ins in eval_instructions:
                     try:
@@ -285,9 +297,9 @@ def run_sequential_fl(
                         eval_failures.append(exc)
                         history.add_failure(server_round, "evaluate", proxy.cid, str(exc))
 
-                loss, metrics = strategy.aggregate_evaluate(server_round, eval_results, eval_failures)
-                if loss is not None:
-                    _attach_eval_to_round_log(strategy, server_round, "federated_eval", loss, metrics)
+                fed_loss, fed_metrics = strategy.aggregate_evaluate(server_round, eval_results, eval_failures)
+                if fed_loss is not None:
+                    _attach_eval_to_round_log(strategy, server_round, "federated_eval", fed_loss, fed_metrics)
 
     log.info(
         "Sequential FL run complete: %d round(s), %d failure(s).",

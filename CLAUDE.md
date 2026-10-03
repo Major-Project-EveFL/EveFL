@@ -66,6 +66,10 @@ streamlit run dashboard/app.py
   a single-process manual FL loop that drives EveFLStrategy and EveFLClient directly. Make that
   runner first-class (`evefl/fl/runner.py`) and seed CUDA lazily.
 - Circom is legacy 0.5.x (JS) plus snarkjs via subprocess. Needs `circom` and `snarkjs` on PATH.
+- Kaggle's image is Python 3.13 / torch 2.11, not the pinned 3.12 environment. `requirements.txt` does not install there
+  (no cp313 wheels for torchvision 0.20.1, qiskit-aer 0.15.1, or grpcio<=1.64.3 which flwr 1.13.0 requires). Use
+  `pip install --no-deps -r requirements-kaggle.txt` and `pip install --no-deps -e .` (docs/KAGGLE_RUNBOOK.md). Runs there
+  are a different software environment from CI: say so when quoting their numbers.
 - Dataset images may sit in nested folders on Kaggle. Build a filename-to-path index once. Never
   `rglob` per image.
 - tenseal==0.3.17 in requirements.txt must be verified to exist for py3.12.

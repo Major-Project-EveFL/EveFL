@@ -48,7 +48,7 @@ jobs:
       - name: Install CPU-only torch first (the pinned CUDA wheels are ~2.5 GB)
         run: pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cpu
 
-      - name: Install project (dev requirements: hypothesis, pytest-cov)
+      - name: "Install project (dev requirements - hypothesis, pytest-cov)"
         run: |
           pip install -r requirements-dev.txt
           pip install -e .

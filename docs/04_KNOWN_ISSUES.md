@@ -33,22 +33,22 @@ Fix in order. Each fix needs a test.
 - P1-1 The BB84 key never protects the FL traffic. AES-GCM is not called anywhere in the FL path.
   README ("encrypted gradients") and dashboard footer ("only AES-256-GCM is active") are wrong
   until wired. Wire it or fix the claims.
-- P1-2 BB84 post-processing. `sifted_key` includes publicly compared sample bits, and there is no
+- P1-2 [FIXED in code: evefl/quantum/postprocess.py (sample discarded, Cascade with counted leakage, verification hash, Toeplitz privacy amplification with the finite-key bound, HMAC authentication), tests/test_postprocess.py, docs/paper_patches/post_processing.md. NOT wired into the FL path yet (Phase 4). Headline 1024-qubit blocks yield no key.] BB84 post-processing. `sifted_key` includes publicly compared sample bits, and there is no
   error correction, no real privacy amplification and no authentication (see docs/03).
 - P1-3 [PARTLY FIXED: ChannelModel with bit-flip noise, expected QBER e+(1-2e)alpha/4 tested; false-alarm rates still to be measured by the sample-size sweep, docs/06] Simulator has no channel noise. Add a depolarizing or bit-flip baseline. Without it,
   false-alarm behaviour and SECURE-band statistics are meaningless.
-- P1-4 QBER estimated on a 25% sample (about 128 bits at n=1024). Statistical noise is large. At
+- P1-4 [FIXED in code/data: exact restatement and checks in evefl/quantum/theory.py, tests/test_theory.py, docs/paper_patches/theorem1_table3.md; paper text pending] QBER estimated on a 25% sample (about 128 bits at n=1024). Statistical noise is large. At
   alpha=0.10 (mean 2.5%), a single client exceeds 5% about 3.6% of the time, and about 10% for
   max over 3 clients (false CAUTION). Theorem 1 in the paper: its sigma (~0.031) matches a
   128-bit sample, but the text says |I|=512 and Eq. 28 gives sigma about 0.016 for 512. Restate
   the theorem for the actual sample size m and use the exact binomial tail. At m=128 and
   alpha=0.66, single-client miss probability is about 4.7% (marginal), and about 1e-4 for max
   over three independent links.
-- P1-5 "Graduated beats binary" claim. Both EveFL and QKDFL lock at 11%, so for static alpha>=0.44
+- P1-5 [CODE AND CONTROL-PLANE RESULTS DONE: per-client exclusion + per-link attacks (Phase 2), docs/adr/0002, docs/paper_patches/phase2_per_client.md; the ACCURACY comparison (B2 vs B3 vs B4 training runs) is Phase 5] "Graduated beats binary" claim. Both EveFL and QKDFL lock at 11%, so for static alpha>=0.44
   EveFL also halts almost every round. The paper's "about 18 of 50 rounds skipped, AUC 0.773 at
   alpha=0.6" and "36% / 64% rounds discarded" are not derivable from the design. Redesign the
   experiment (per-client links, intermittent or step Eve) or remove the claim.
-- P1-6 Paper Table III (0.8% at alpha=0, 100 trials, std 0.5-1.0%) cannot come from this
+- P1-6 [FIXED: regenerated, simulated, docs/validation/table3_theorem1.json; alpha=0,e=0 is exactly 0; paper text pending] Paper Table III (0.8% at alpha=0, 100 trials, std 0.5-1.0%) cannot come from this
   noiseless simulator, and demo_validation uses 10 trials. Regenerate from real runs.
 - P1-7 Every Section VIII number (AUC, MIA, overhead, Table IV) is projected. "17.3x" CKKS
   inflation is called fabricated in tests/test_ckks.py. QKDFL comparison numbers are invented.
@@ -70,7 +70,7 @@ Fix in order. Each fix needs a test.
 - P2-2 bb84.py ValueError message missing f-string prefix.
 - P2-3 [FIXED: exact vectorised backend bb84_numpy (default), Qiskit kept as reference and cross-checked by tests/test_backend_crosscheck.py + scripts/validate_backends.py] BB84 runs one Aer job per qubit (up to two), taking seconds per client-round, not the
   paper's 180 ms. Add a vectorised numpy backend and keep Qiskit for cross-validation.
-- P2-4 State machine has no hysteresis. Add it plus property tests.
+- P2-4 [FIXED: HysteresisConfig (immediate escalation, slow de-escalation), property tests, 100% branch coverage of the controller and policy modules] State machine has no hysteresis. Add it plus property tests.
 - P2-5 `min_available_clients=max(num_clients,3)` can hang for num_clients<3. Flower
   `start_simulation` is deprecated in newer versions. Plan the migration.
 - P2-6 Missing tests. Strategy, client, dataset, aggregation, integration, docs build.

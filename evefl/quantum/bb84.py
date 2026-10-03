@@ -88,11 +88,13 @@ class BB84Protocol(QKDProtocol):
                 sifted_bob.append(bob_results[i])
 
         n_sifted = len(sifted_alice)
-        qber, sample_size, sample_errors = self._estimate_qber(sifted_alice, sifted_bob)
+        qber, sample_size, sample_errors, sample_positions = self._estimate_qber(sifted_alice, sifted_bob)
         true_errors = sum(1 for a, b in zip(sifted_alice, sifted_bob) if a != b)
 
         return QKDResult(
             sifted_key=sifted_alice,
+            bob_sifted_key=sifted_bob,
+            sample_indices=sample_positions,
             qber=qber,
             n_qubits_sent=n_qubits,
             n_sifted=n_sifted,
@@ -111,13 +113,15 @@ class BB84Protocol(QKDProtocol):
             },
         )
 
-    def _estimate_qber(self, sifted_alice: list[int], sifted_bob: list[int]) -> tuple[float, int, int]:
-        """Returns (qber_estimate, sample_size, sample_errors) from a random public sample."""
+    def _estimate_qber(
+        self, sifted_alice: list[int], sifted_bob: list[int]
+    ) -> tuple[float, int, int, list[int]]:
+        """Returns (qber_estimate, sample_size, sample_errors, sample_positions) from a random public sample."""
         n_sifted = len(sifted_alice)
         if n_sifted == 0:
-            return 0.0, 0, 0
+            return 0.0, 0, 0, []
         sample_size = max(1, int(n_sifted * self._sample_fraction))
         sample_size = min(sample_size, n_sifted)
         sample_indices = self._rng.sample(range(n_sifted), sample_size)
         mismatches = sum(1 for i in sample_indices if sifted_alice[i] != sifted_bob[i])
-        return mismatches / sample_size, sample_size, mismatches
+        return mismatches / sample_size, sample_size, mismatches, sorted(sample_indices)

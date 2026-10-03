@@ -2,5 +2,8 @@
 ruff==0.6.9
 mypy==1.13.0
 pre-commit==3.8.0
-pandas-stubs
-types-PyYAML
+pandas-stubs==3.0.5.260914
+types-PyYAML==6.0.12.20260906
+hypothesis==6.168.3
+pytest-cov==7.1.0
+coverage==7.16.2

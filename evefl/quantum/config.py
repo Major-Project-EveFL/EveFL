@@ -63,4 +63,6 @@ class QKDConfig:
 # preset for reported results is chosen from the sample-size sweep (docs/06) and added later.
 PRESETS: Dict[str, Dict[str, object]] = {
     "lite": {"n_qubits": 1024, "sample_fraction": 0.25},
+    # Headline for reported results: a documented deviation from the pre-registered sweep rule (docs/06).
+    "headline": {"n_qubits": 1024, "sample_fraction": 0.25},
 }

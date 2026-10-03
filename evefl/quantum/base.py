@@ -87,6 +87,10 @@ class QKDResult:
     intercept_probability: float   # ground truth flag: fraction of qubits intercepted by Eve (0.0-1.0)
     eavesdropper_active: bool      # convenience flag: true if intercept_probability > 0.0, false otherwise
     metadata: dict = field(default_factory=dict)  # any extra info the protocol wants to report
+    # Needed by the classical post-processing (error correction, privacy amplification): Bob's sifted bits
+    # and the positions (within the sifted key) that were publicly compared for the QBER estimate.
+    bob_sifted_key: Optional[list[int]] = None
+    sample_indices: Optional[list[int]] = None
 
 
 class QKDProtocol(ABC):

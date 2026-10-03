@@ -43,12 +43,24 @@ Status: `[ ]` open, `[~]` code done / paper text pending, `[x]` paper updated.
   proper fix, verify the Zhang et al. citation). Notebooks that used 16 or 64 qubits (QBER sample
   of 2 to 8 bits) said nothing about the controller.
 
+- [~] **Key post-processing (Phase 1 step 3).** `post_processing.md`: pipeline, the verified finite-key bound with its
+  assumptions, the block size a key needs (headline 1024 qubits gives none), HMAC authentication caveat, no-key rounds
+  handled like LOCKDOWN with a separate reason. Not wired into the FL path yet.
+
+- [~] **Key block vs controller block (ADR 0001).** Replace the "1024 photons per round produce an AES key" claim; weak-Eve
+  result with its assumption; limitations (not-secret simulation keys, HMAC not Wegman-Carter); Cascade inefficiency. Details in
+  `post_processing.md`, decision in `docs/adr/0001-key-block-separate-from-controller-block.md`.
+
+- [~] **Per-client decisions, hysteresis, policy-mode comparison (Phase 2).** `phase2_per_client.md`: the central claim
+  with its honest limits (rounds, not accuracy; selective exclusion; screening inactive below 3 updates), hysteresis as stability
+  not accuracy, system-level vs per-link false-CAUTION figures. Phase 5 must add the accuracy and participation results.
+
 ## Claims that are not measured yet
 - [ ] **Measured vs projected labels.** Every Section VIII number (AUC, MIA, overhead, Table IV)
   is projected. Label each "projected" or replace it with a measured value from a results file.
   "17.3x" CKKS inflation and the QKDFL comparison numbers must go or be re-measured.
-- [ ] **Table III / Theorem 1.** Regenerate from real runs; restate Theorem 1 for the actual QBER
-  sample size (see docs/04 P1-4).
+- [~] **Table III / Theorem 1.** Done in code and data: `theorem1_table3.md` (restated theorem with exact numbers,
+  regenerated simulated Table III as `docs/validation/table3.tex`). The paper text still has to be replaced.
 - [ ] **"Graduated beats binary".** Needs per-client-link or intermittent-Eve experiments (P1-5),
   otherwise remove the claim.
 - [ ] **Encryption claims.** AES-GCM, CKKS and Groth16 are not in the FL path yet; do not describe

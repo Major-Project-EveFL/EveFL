@@ -43,9 +43,21 @@ def client_id_to_int(cid: str | int) -> int:
     return int(text) if text.isdigit() else zlib.crc32(text.encode("utf-8"))
 
 
-def qkd_seed_sequence(experiment_seed: int, server_round: int, cid: str | int) -> np.random.SeedSequence:
-    """Root SeedSequence for one (experiment, round, client) exchange."""
-    return np.random.SeedSequence(entropy=[int(experiment_seed), int(server_round), client_id_to_int(cid)])
+def qkd_seed_sequence(
+    experiment_seed: int, server_round: int, cid: str | int, purpose: str = "controller"
+) -> np.random.SeedSequence:
+    """Root SeedSequence for one (experiment, round, client) exchange.
+
+    `purpose` separates the two exchanges a round may run: the "controller" exchange (the QBER signal that drives
+    SECURE/CAUTION/LOCKDOWN, entropy unchanged so every validated result is reproduced) and the "key" exchange
+    (a separate, larger block for key generation, docs/adr/0001). They never share randomness.
+    """
+    entropy = [int(experiment_seed), int(server_round), client_id_to_int(cid)]
+    if purpose == "key":
+        entropy.append(1)
+    elif purpose != "controller":
+        raise ValueError(f"purpose must be 'controller' or 'key', got {purpose!r}")
+    return np.random.SeedSequence(entropy=entropy)
 
 
 def stream_generators(root: np.random.SeedSequence, call_index: int = 0) -> Dict[str, np.random.Generator]:

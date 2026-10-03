@@ -23,7 +23,10 @@ def _report():
                        "channel_plan": {"default_noise": 0.01, "link_noise": {},
                                         "attacks": {"0": {"alpha": 0.6, "kind": "constant"}}},
                        "rounds_discarded": 1, "exclusion_counts": {"lockdown": 2, "no_key": 1},
-                       "participation_actual": {"0": 1, "1": 2, "2": 2}},
+                       "participation_actual": {"0": 1, "1": 2, "2": 2},
+                       "environment": {"python": "3.13.15", "system": "Linux", "machine": "x86_64",
+                                       "libraries": {"torch": "2.11.0+cu128", "numpy": "2.5.3", "flwr": "1.13.0",
+                                                     "qiskit": None}}},
         "rounds": [
             {"round": 1, "state": "SECURE", "system_qber": 0.0, "learning_rate": 1e-3, "model_updated": True,
              "excluded_clients": ["0"], "qkd_per_client": {"0": {"qber_sample_size": 126}, "1": {"qber_sample_size": 131}},
@@ -61,14 +64,22 @@ def test_summary_shows_policy_channel_plan_exclusions_and_participation():
 
 def test_old_results_without_policy_fields_still_summarise():
     report = _report()
-    for key in ("policy", "channel_plan", "rounds_discarded", "exclusion_counts", "participation_actual"):
+    for key in ("policy", "channel_plan", "rounds_discarded", "exclusion_counts", "participation_actual", "environment"):
         report["experiment"].pop(key)
     report["rounds"][0].pop("excluded_clients")
     text = "\n".join(_load().summarize(report))
     assert "policy          : n/a" in text and "config_hash abc" in text
+    assert "environment     : n/a" in text
 
 
 def test_summary_shows_selection_auc_and_thin_classes():
     text = "\n".join(_load().summarize(_report()))
     assert "val_AUC*" in text and "0.6555" in text
     assert "thin classes in the validation AUC (last evaluated round): ['Hernia']" in text
+
+
+def test_summary_shows_the_recorded_environment_and_omits_missing_packages():
+    text = "\n".join(_load().summarize(_report()))
+    assert "environment     : python 3.13.15 Linux/x86_64" in text
+    assert "torch 2.11.0+cu128" in text and "numpy 2.5.3" in text and "flwr 1.13.0" in text
+    assert "qiskit" not in text

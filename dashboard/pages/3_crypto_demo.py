@@ -17,7 +17,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
 from evefl.crypto.classical import ClassicalCipherSuite
-from evefl.crypto.base import EncryptedPayload
 
 st.set_page_config(page_title="Crypto Demo", page_icon="🔒")
 

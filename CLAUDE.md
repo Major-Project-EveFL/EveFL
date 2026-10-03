@@ -27,7 +27,10 @@ update `docs/04` when you fix one.
 - Novelty citations (QKDFL, FedSec) are unverified. Do not rely on them without checking the DOI.
 
 ## Layout
-- `evefl/quantum/` BB84 (Qiskit Aer) + Eve intercept-resend (`base.py` QKDProtocol ABC)
+- `evefl/quantum/` `base.py` (QKDProtocol ABC, `ChannelModel`: Eve alpha + bit-flip noise e, QBER = e+(1-2e)alpha/4),
+  `bb84_numpy.py` (fast, exact, default), `bb84.py` (Qiskit reference, slow), `seeding.py` (independent streams
+  from experiment seed/round/client), `config.py` (refuses QBER samples under ~100 bits), `validation.py`. Only `qber`
+  (a sample estimate) may drive the controller; `sim_only_*` metadata is simulation ground truth.
 - `evefl/crypto/` `classical.py` (HKDF + AES-256-GCM), `ckks.py` (TenSEAL), `groth16.py` + `circuits/` (norm proof)
 - `evefl/orchestration/state_machine.py` — pure logic, must NOT import ML or quantum code
 - `evefl/fl/` `model.py`, `dataset.py` (Dirichlet partition), `client.py`, `strategy.py` (`EveFLStrategy`),
@@ -60,6 +63,8 @@ streamlit run dashboard/app.py
 - CPU-only torch 2.5.1. tenseal installs fine. `circom`/`snarkjs` are NOT installed, so `zk` tests auto-skip
   (markers `ckks`, `zk` in `tests/conftest.py`). Run the full suite on Kaggle/WSL.
 - Baseline (2026-09-29, before any fixes): 22 passed, 6 errors (Groth16, no circom/snarkjs). With markers: 22 passed, 6 skipped.
+- CI: `.github/workflows/ci.yml` runs two jobs on Linux with `--require-optional-tools` (skips become failures): tests, and Groth16 (circom@0.5.46 + snarkjs@0.4.27). Check runs via the public API (no `gh`).
+- Tooling: `pip install -r requirements-dev.txt`, then `ruff check .` and `mypy` (typed core listed in pyproject). Both run in CI (lint job). Optional: `pre-commit install`. Ruff is lint-only; no auto-formatter yet (would rewrite every file).
 - No `gh` CLI. Workflow: one branch per task, push to `parineeta`, open the PR on GitHub web. Tooling/CI PR comes after the P0 fixes.
 
 ## Gotchas
@@ -67,7 +72,7 @@ streamlit run dashboard/app.py
   Use the sequential driver in `evefl/fl/runner.py`.
 - Seed CUDA lazily; `set_global_seed` calling `torch.cuda` early caused a Kaggle deadlock.
 - Do not use builtin `hash()` for seeds (varies per process). Use a stable hash.
-- Pinned versions: flwr 1.13.0 (requirements.txt may lag), cryptography <43 for flwr, torch 2.5.1.
+- Pinned versions: flwr 1.13.0 (settled; 1.11.1 pinned numpy<2 and clashed with Kaggle), cryptography <43 for flwr, torch 2.5.1.
 - FedAvg over BatchNorm buffers (`num_batches_tracked`) needs explicit handling.
 - Split ChestX-ray14 by Patient ID, not image, to avoid leakage.
 

@@ -35,7 +35,7 @@ import logging
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 # Ensure repo root is on path
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -100,6 +100,8 @@ def run_all_experiments(
     n_qubits: int,
     output_dir: Path,
     seed: int,
+    pretrained: bool,
+    pretrained_weights: Optional[Path] = None,
 ) -> Dict[str, Any]:
     """
     Run all 4 Eve scenarios and save results.
@@ -130,6 +132,8 @@ def run_all_experiments(
                 seed=seed,
                 experiment_name=scenario.name,
                 output_path=scenario_output,
+                pretrained=pretrained,
+                pretrained_weights=pretrained_weights,
             )
 
             summary["scenario"] = asdict(scenario)
@@ -201,6 +205,10 @@ def main() -> int:
     parser.add_argument("--qubits", type=int, default=1024, help="BB84 qubits (default: 1024)")
     parser.add_argument("--output-dir", type=Path, default=Path("results"), help="Output directory")
     parser.add_argument("--seed", type=int, default=42, help="Base random seed")
+    parser.add_argument("--pretrained", action=argparse.BooleanOptionalAction, default=True,
+                        help="ImageNet-pretrained init (default) or --no-pretrained; recorded in every results file")
+    parser.add_argument("--pretrained-weights", type=Path, default=None,
+                        help="Local ImageNet ResNet-18 state-dict file (offline Kaggle)")
 
     args = parser.parse_args()
 
@@ -214,6 +222,8 @@ def main() -> int:
         n_qubits=args.qubits,
         output_dir=args.output_dir,
         seed=args.seed,
+        pretrained=args.pretrained,
+        pretrained_weights=args.pretrained_weights,
     )
 
     return 0

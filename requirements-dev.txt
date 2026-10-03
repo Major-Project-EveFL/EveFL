@@ -1,0 +1,6 @@
+-r requirements.txt
+ruff==0.6.9
+mypy==1.13.0
+pre-commit==3.8.0
+pandas-stubs
+types-PyYAML

@@ -1,0 +1,44 @@
+name: Nightly validation
+
+# The Qiskit-vs-numpy BB84 cross-check is too slow for every push. Running it nightly (and on demand)
+# keeps it from going stale unnoticed. The JSON evidence is uploaded as a build artifact; commit
+# it to docs/validation/ when it changes meaningfully.
+
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend-crosscheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install (CPU torch first: conftest imports evefl.fl)
+        run: |
+          pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Slow tests
+        run: python -m pytest -q -m slow
+
+      - name: Archive cross-check evidence
+        run: python scripts/validate_backends.py --n-qubits 256 --trials 60 --output validation_backend_crosscheck.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-crosscheck
+          path: validation_backend_crosscheck.json

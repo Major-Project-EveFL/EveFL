@@ -102,7 +102,7 @@ pip install -e .
 Uncomment the Phase 4+ dependencies in `requirements.txt` before running FL:
 
 ```
-flwr==1.11.1
+flwr==1.13.0
 torch==2.5.1
 torchvision==0.20.1
 ```
@@ -132,18 +132,20 @@ partition_and_save(
 **Try the QBER controller standalone:**
 
 ```python
-from evefl.quantum.bb84 import BB84Protocol
 from evefl.orchestration.state_machine import StateController
+from evefl.quantum.base import ChannelModel
+from evefl.quantum.bb84_numpy import BB84NumpyProtocol   # fast, exact; "bb84" is the slow Qiskit reference
 
-bb84       = BB84Protocol(seed=42)
+bb84       = BB84NumpyProtocol(seed=42)
 controller = StateController()
 
-# Simulate a round with 44% Eve interception
-result     = bb84.run_exchange(n_qubits=1024, eve_intercept_rate=0.44)
+# One exchange with 30% Eve interception (expected QBER = alpha/4 = 7.5%, plus sampling noise)
+channel    = ChannelModel(intercept_probability=0.3, bit_flip_probability=0.0)
+result     = bb84.run_exchange(n_qubits=1024, channel=channel)
 transition = controller.update(result.qber)
 
 print(f"QBER: {result.qber:.3f}  →  State: {transition.new_state.value}")
-# QBER: 0.107  →  State: CAUTION
+# QBER: 0.094  →  State: CAUTION   (a 128-bit sample, so the estimate is noisy)
 ```
 
 ---

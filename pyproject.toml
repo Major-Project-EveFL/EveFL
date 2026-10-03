@@ -14,7 +14,36 @@ include = ["evefl*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-m 'not slow'"
 markers = [
+    "slow: long-running statistical cross-checks (run nightly or with -m slow)",
     "ckks: needs the tenseal package (auto-skipped if missing)",
     "zk: needs circom and snarkjs on PATH (auto-skipped if missing)",
 ]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["docs", "*.ipynb"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B"]
+ignore = [
+    "E501",  # long lines are left to the author
+    "B905",  # zip() without strict=: too noisy for now
+]
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/*" = ["E402"]  # sys.path bootstrap before imports
+"dashboard/*" = ["E402"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["evefl", "tests"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+warn_unused_ignores = true
+check_untyped_defs = false
+files = ["evefl/orchestration", "evefl/quantum", "evefl/registry.py", "evefl/fl/screening.py",
+         "evefl/fl/schedule.py"]

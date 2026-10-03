@@ -1,6 +1,7 @@
 import os
 
 import pytest
+from cryptography.exceptions import InvalidTag
 
 from evefl.crypto.classical import ClassicalCipherSuite
 
@@ -44,5 +45,5 @@ def test_decrypt_fails_with_wrong_key():
     wrong_key = suite.derive_key(os.urandom(32))
     payload = suite.encrypt(b"secret", key)
 
-    with pytest.raises(Exception):
+    with pytest.raises(InvalidTag):
         suite.decrypt(payload, wrong_key)

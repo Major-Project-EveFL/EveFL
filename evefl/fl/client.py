@@ -37,7 +37,8 @@ from evefl.orchestration.state_machine import SecurityState
 
 log = logging.getLogger(__name__)
 
-DEFAULT_LR = 1e-4
+DEFAULT_LR = 1e-3  # paper: initial learning rate 0.001 (was 1e-4 in earlier code)
+DEFAULT_WEIGHT_DECAY = 1e-2  # torch AdamW default; the paper does not specify one
 DEFAULT_LOCAL_EPOCHS = 1
 
 
@@ -89,11 +90,14 @@ def _train_one_client(
     epochs: int,
     lr: float,
     fedprox_mu: float,
+    weight_decay: float = DEFAULT_WEIGHT_DECAY,
 ) -> Dict[str, float]:
     model.to(device)
     model.train()
     criterion = get_criterion()
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    # Fresh optimiser every round (Adam moments are not carried across rounds). The learning rate
+    # follows the global round: the server sends it in the round config (see schedule.py).
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
 
     global_params = None
     if fedprox_mu > 0.0:
@@ -155,6 +159,7 @@ class EveFLClient(NumPyClient):
         batch_size: int = 32,
         local_epochs: int = DEFAULT_LOCAL_EPOCHS,
         lr: float = DEFAULT_LR,
+        weight_decay: float = DEFAULT_WEIGHT_DECAY,
         device: torch.device | None = None,
     ):
         self.cid = cid
@@ -163,10 +168,14 @@ class EveFLClient(NumPyClient):
         self.partition_root = partition_root
         self.batch_size = batch_size
         self.local_epochs = local_epochs
-        self.lr = lr
+        self.lr = lr  # fallback only; the per-round rate normally arrives as config["learning_rate"]
+        self.weight_decay = weight_decay
         self.device = device or get_device()
 
-        self.model = build_resnet18(pretrained=True)
+        # Pretrained or not is decided ONCE, by the server's initial parameters; every round the
+        # server overwrites all client weights (incl. BatchNorm buffers) before local training, so
+        # the client's own init is irrelevant. Random init here avoids a per-client weight download.
+        self.model = build_resnet18(pretrained=False)
         self._train_loader = None  # lazy: built on first fit(), dataset load is not free
 
     def _get_train_loader(self):
@@ -197,12 +206,13 @@ class EveFLClient(NumPyClient):
             return parameters, 0, {"state": state, "qber": qber, "train_loss": float("nan")}
 
         fedprox_mu = float(config.get("fedprox_mu", 0.0))
+        learning_rate = float(config.get("learning_rate", self.lr))
         metrics = _train_one_client(
             self.model, self._get_train_loader(),
-            device=self.device, epochs=self.local_epochs, lr=self.lr,
-            fedprox_mu=fedprox_mu,
+            device=self.device, epochs=self.local_epochs, lr=learning_rate,
+            fedprox_mu=fedprox_mu, weight_decay=self.weight_decay,
         )
-        metrics.update({"state": state, "qber": qber, "fedprox_mu": fedprox_mu})
+        metrics.update({"state": state, "qber": qber, "fedprox_mu": fedprox_mu, "learning_rate": learning_rate})
 
         n_examples = len(self._get_train_loader().dataset)
         return get_model_parameters(self.model), n_examples, metrics
@@ -229,6 +239,7 @@ def create_client_fn(
     batch_size: int = 32,
     local_epochs: int = DEFAULT_LOCAL_EPOCHS,
     lr: float = DEFAULT_LR,
+    weight_decay: float = DEFAULT_WEIGHT_DECAY,
 ) -> Callable[[str], Client]:
     """
     Factory matching what `flwr.simulation.start_simulation(client_fn=...)`
@@ -241,7 +252,7 @@ def create_client_fn(
     def client_fn(cid: str) -> Client:
         return EveFLClient(
             cid, data_root, partition_root,
-            batch_size=batch_size, local_epochs=local_epochs, lr=lr,
+            batch_size=batch_size, local_epochs=local_epochs, lr=lr, weight_decay=weight_decay,
         ).to_client()
 
     return client_fn

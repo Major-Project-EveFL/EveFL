@@ -46,10 +46,10 @@ diffing the output byte-for-byte.)
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import random
-import sys
 import time
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
@@ -58,13 +58,15 @@ import numpy as np
 import torch
 from flwr.common import ndarrays_to_parameters
 
-from evefl.fl.client import create_client_fn, get_model_parameters
+from evefl.fl.client import DEFAULT_LR, DEFAULT_WEIGHT_DECAY, create_client_fn, get_model_parameters
 from evefl.fl.dataset import partition_and_save
 from evefl.fl.evaluation import make_evaluate_fn
-from evefl.fl.model import build_resnet18
+from evefl.fl.model import build_resnet18, describe_initialisation
 from evefl.fl.runner import build_local_client_proxies, run_sequential_fl
-from evefl.fl.strategy import EveFLStrategy
+from evefl.fl.strategy import DEFAULT_CAUTION_LR_MULTIPLIER, EveFLStrategy
 from evefl.orchestration.state_machine import StateThresholds
+from evefl.quantum.config import PRESETS, QKDConfig
+from evefl.quantum.factory import DEFAULT_BACKEND, available_backends
 
 log = logging.getLogger("evefl.fl.server")
 
@@ -114,8 +116,10 @@ ATTACK_SCHEDULES: Dict[str, Callable[[int], float]] = {
 # Building blocks
 # ============================================================================
 
-def build_initial_parameters():
-    model = build_resnet18(pretrained=True)
+def build_initial_parameters(pretrained: bool, pretrained_weights: Optional[Path] = None):
+    """Global model initialisation. `pretrained` is an explicit choice: a pretrained run and a
+    from-scratch run are not comparable, so it is recorded in every results file."""
+    model = build_resnet18(pretrained=pretrained, weights_path=pretrained_weights)
     return ndarrays_to_parameters(get_model_parameters(model))
 
 
@@ -127,6 +131,13 @@ def create_strategy(
     n_qubits: int,
     num_clients: int,
     evaluate_fn=None,
+    qkd_backend: str = DEFAULT_BACKEND,
+    sample_fraction: float = 0.25,
+    bit_flip_probability: float = 0.0,
+    experiment_seed: int = 0,
+    base_lr: Optional[float] = None,
+    num_rounds: Optional[int] = None,
+    caution_lr_multiplier: float = DEFAULT_CAUTION_LR_MULTIPLIER,
 ) -> EveFLStrategy:
     return EveFLStrategy(
         initial_parameters=initial_parameters,
@@ -138,6 +149,13 @@ def create_strategy(
         min_fit_clients=min(num_clients, DEFAULT_MIN_FIT_CLIENTS),
         min_available_clients=max(num_clients, DEFAULT_MIN_AVAILABLE_CLIENTS),
         evaluate_fn=evaluate_fn,
+        base_lr=base_lr,
+        num_rounds=num_rounds,
+        caution_lr_multiplier=caution_lr_multiplier,
+        qkd_backend=qkd_backend,
+        sample_fraction=sample_fraction,
+        bit_flip_probability=bit_flip_probability,
+        experiment_seed=experiment_seed,
     )
 
 
@@ -158,6 +176,15 @@ def run_experiment(
     seed: int,
     experiment_name: str,
     output_path: Path,
+    pretrained: bool,
+    pretrained_weights: Optional[Path] = None,
+    lr: float = DEFAULT_LR,
+    caution_lr_multiplier: float = DEFAULT_CAUTION_LR_MULTIPLIER,
+    weight_decay: float = DEFAULT_WEIGHT_DECAY,
+    qkd_backend: str = DEFAULT_BACKEND,
+    sample_fraction: float = 0.25,
+    bit_flip_probability: float = 0.0,
+    allow_small_sample: bool = False,
     intercept_probability_schedule: Optional[Callable[[int], float]] = None,
     eval_every_n_rounds: int = 1,
     run_federated_evaluate: bool = True,
@@ -171,15 +198,19 @@ def run_experiment(
     round — see `ATTACK_SCHEDULES["demo"]` for a schedule tuned to
     visibly hit all three security states in one short run.
     """
+    qkd_config = QKDConfig(qkd_backend, n_qubits, sample_fraction, bit_flip_probability)
+    qkd_config.validate(allow_small_sample=allow_small_sample)  # refuse meaningless QKD settings up front
+
     set_global_seed(seed)
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    initial_parameters = build_initial_parameters()
+    initial_parameters = build_initial_parameters(pretrained, pretrained_weights)
+    init_weights = describe_initialisation(pretrained, pretrained_weights)
 
     client_fn = create_client_fn(
         data_root, partition_root,
-        batch_size=batch_size, local_epochs=local_epochs,
+        batch_size=batch_size, local_epochs=local_epochs, lr=lr, weight_decay=weight_decay,
     )
     client_proxies = build_local_client_proxies(client_fn, num_clients=num_clients)
 
@@ -198,6 +229,13 @@ def run_experiment(
         n_qubits=n_qubits,
         num_clients=num_clients,
         evaluate_fn=evaluate_fn,
+        qkd_backend=qkd_backend,
+        sample_fraction=sample_fraction,
+        bit_flip_probability=bit_flip_probability,
+        experiment_seed=seed,
+        base_lr=lr,
+        num_rounds=num_rounds,
+        caution_lr_multiplier=caution_lr_multiplier,
     )
 
     start_time = time.perf_counter()
@@ -228,6 +266,15 @@ def run_experiment(
         elapsed_seconds=elapsed_seconds,
         round_logs=strategy.round_logs,
         n_failures=len(history.failures),
+        init_weights=init_weights,
+        qkd=qkd_config.to_dict(),
+        optimizer={
+            "name": "adamw",
+            "lr": lr,
+            "schedule": "cosine_by_global_round",
+            "caution_lr_multiplier": caution_lr_multiplier,
+            "weight_decay": weight_decay,
+        },
     )
 
     with open(output_path, "w") as f:
@@ -254,21 +301,35 @@ def build_experiment_log(
     elapsed_seconds: float,
     round_logs: list,
     n_failures: int,
+    init_weights: Dict[str, Any],
+    optimizer: Optional[Dict[str, Any]] = None,
+    qkd: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     state_counts: Dict[str, int] = {}
     for r in round_logs:
         state_counts[r["state"]] = state_counts.get(r["state"], 0) + 1
 
+    config = {
+        "name": experiment_name,
+        "seed": seed,
+        "num_clients": num_clients,
+        "num_rounds": num_rounds,
+        "local_epochs": local_epochs,
+        "batch_size": batch_size,
+        "n_qubits": n_qubits,
+        "intercept_probability": intercept_probability,
+        "pretrained": init_weights["pretrained"],
+        "init_weights_sha256": init_weights["sha256"],
+        "optimizer": optimizer,
+        "qkd": qkd,
+    }
+    config_hash = hashlib.sha256(json.dumps(config, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+
     return {
         "experiment": {
-            "name": experiment_name,
-            "seed": seed,
-            "num_clients": num_clients,
-            "num_rounds": num_rounds,
-            "local_epochs": local_epochs,
-            "batch_size": batch_size,
-            "n_qubits": n_qubits,
-            "intercept_probability": intercept_probability,
+            **config,
+            "config_hash": config_hash,
+            "init_weights": init_weights,
             "elapsed_seconds": elapsed_seconds,
             "execution_engine": "sequential (Ray-free)",
             "n_failures": n_failures,
@@ -292,11 +353,33 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--num-rounds", type=int, default=12)
     p.add_argument("--local-epochs", type=int, default=1)
     p.add_argument("--batch-size", type=int, default=16)
-    p.add_argument("--qubits", type=int, default=512, dest="n_qubits")
+    p.add_argument("--qubits", type=int, default=PRESETS["lite"]["n_qubits"], dest="n_qubits",
+                    help="Qubits per BB84 exchange. The QBER sample holds ~qubits*sample_fraction/2 bits; "
+                         "runs with an expected sample under 100 are refused (see --allow-small-sample).")
+    p.add_argument("--sample-fraction", type=float, default=PRESETS["lite"]["sample_fraction"],
+                    help="Fraction of the sifted key publicly compared to estimate QBER.")
+    p.add_argument("--qkd-backend", type=str, default=DEFAULT_BACKEND, choices=available_backends(),
+                    help="bb84_numpy: fast and exact (default). bb84: gate-level Qiskit, seconds per exchange.")
+    p.add_argument("--bit-flip-probability", type=float, default=0.0,
+                    help="Baseline channel noise: independent bit flip on the receiver's result "
+                         "(expected QBER = e + (1-2e)*alpha/4).")
+    p.add_argument("--allow-small-sample", action="store_true",
+                    help="Run even though the QBER sample is tiny (results are meaningless; demos only).")
     p.add_argument("--intercept-probability", type=float, default=0.0,
                     help="Fixed Eve intercept-resend probability. Ignored if --attack-schedule is set.")
     p.add_argument("--attack-schedule", type=str, default=None, choices=list(ATTACK_SCHEDULES.keys()),
                     help="Use a preset per-round schedule instead of a fixed intercept-probability.")
+    p.add_argument("--pretrained", action=argparse.BooleanOptionalAction, default=True,
+                    help="Initialise the global ResNet-18 from ImageNet weights (default, as in the paper). "
+                         "Use --no-pretrained for a from-scratch run; the choice is written into the results JSON.")
+    p.add_argument("--pretrained-weights", type=Path, default=None,
+                    help="Local ImageNet ResNet-18 state-dict file (for offline Kaggle notebooks; "
+                         "see scripts/cache_pretrained_weights.py). Without it, torchvision downloads the weights.")
+    p.add_argument("--lr", type=float, default=DEFAULT_LR,
+                    help="Base (round-1) learning rate for AdamW; cosine-annealed over the GLOBAL rounds.")
+    p.add_argument("--caution-lr-multiplier", type=float, default=DEFAULT_CAUTION_LR_MULTIPLIER,
+                    help="Learning-rate multiplier applied in CAUTION rounds (0.5: 1e-3 -> 5e-4).")
+    p.add_argument("--weight-decay", type=float, default=DEFAULT_WEIGHT_DECAY)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--experiment-name", type=str, default="evefl_experiment")
     p.add_argument("--output", type=Path, default=Path("results/fl_training_log.json"))
@@ -345,6 +428,15 @@ def main(argv=None) -> None:
         seed=args.seed,
         experiment_name=args.experiment_name,
         output_path=args.output,
+        pretrained=args.pretrained,
+        pretrained_weights=args.pretrained_weights,
+        qkd_backend=args.qkd_backend,
+        sample_fraction=args.sample_fraction,
+        bit_flip_probability=args.bit_flip_probability,
+        allow_small_sample=args.allow_small_sample,
+        lr=args.lr,
+        caution_lr_multiplier=args.caution_lr_multiplier,
+        weight_decay=args.weight_decay,
         eval_every_n_rounds=args.eval_every_n_rounds,
         run_federated_evaluate=not args.no_federated_evaluate,
     )

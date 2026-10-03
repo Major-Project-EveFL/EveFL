@@ -1,0 +1,314 @@
+{
+  "generated_utc": "2026-09-30T14:15:05+00:00",
+  "config": {
+    "n_qubits": 256,
+    "qiskit_trials": 60,
+    "numpy_trials": 600,
+    "seed": 2026,
+    "significance": 0.001
+  },
+  "versions": {
+    "numpy": "1.26.4",
+    "scipy": "1.17.1"
+  },
+  "passed": true,
+  "failed_cases": [],
+  "cases": [
+    {
+      "alpha": 0.0,
+      "bit_flip": 0.0,
+      "expected_qber": 0.0,
+      "qiskit": {
+        "expected_qber": 0.0,
+        "pooled_qber": 0.0,
+        "pooled_errors": 0,
+        "pooled_sample_size": 1881,
+        "qber_ci_low": 0.0,
+        "qber_ci_high": 0.004032730432190732,
+        "qber_pvalue": 1.0,
+        "sifted_fraction": 0.4953125,
+        "sifted_pvalue": 0.24857054382470173,
+        "true_qber_pvalue": 1.0,
+        "dispersion_pvalue": NaN
+      },
+      "numpy": {
+        "expected_qber": 0.0,
+        "pooled_qber": 0.0,
+        "pooled_errors": 0,
+        "pooled_sample_size": 18936,
+        "qber_ci_low": 0.0,
+        "qber_ci_high": 0.00040131903063553515,
+        "qber_pvalue": 1.0,
+        "sifted_fraction": 0.498828125,
+        "sifted_pvalue": 0.3596632120465508,
+        "true_qber_pvalue": 1.0,
+        "dispersion_pvalue": NaN
+      },
+      "qiskit_vs_numpy": {
+        "chi2": 0.0,
+        "pvalue": 1.0,
+        "qber_a": 0.0,
+        "qber_b": 0.0
+      }
+    },
+    {
+      "alpha": 0.0,
+      "bit_flip": 0.02,
+      "expected_qber": 0.02,
+      "qiskit": {
+        "expected_qber": 0.02,
+        "pooled_qber": 0.019670388091440724,
+        "pooled_errors": 37,
+        "pooled_sample_size": 1881,
+        "qber_ci_low": 0.01077793234431148,
+        "qber_ci_high": 0.032536665663451037,
+        "qber_pvalue": 1.0,
+        "sifted_fraction": 0.4953125,
+        "sifted_pvalue": 0.24857054382470173,
+        "true_qber_pvalue": 0.2869788932437497,
+        "dispersion_pvalue": 0.30947286810651015
+      },
+      "numpy": {
+        "expected_qber": 0.02,
+        "pooled_qber": 0.017057456696239967,
+        "pooled_errors": 323,
+        "pooled_sample_size": 18936,
+        "qber_ci_low": 0.014126843880007288,
+        "qber_ci_high": 0.020377740984584437,
+        "qber_pvalue": 0.0033488339296103473,
+        "sifted_fraction": 0.498828125,
+        "sifted_pvalue": 0.3596632120465508,
+        "true_qber_pvalue": 0.018208122236216977,
+        "dispersion_pvalue": 0.059442464679829124
+      },
+      "qiskit_vs_numpy": {
+        "chi2": 0.6873956048077908,
+        "pvalue": 0.4070516472214958,
+        "qber_a": 0.019670388091440724,
+        "qber_b": 0.017057456696239967
+      }
+    },
+    {
+      "alpha": 0.3,
+      "bit_flip": 0.0,
+      "expected_qber": 0.075,
+      "qiskit": {
+        "expected_qber": 0.075,
+        "pooled_qber": 0.08293460925039872,
+        "pooled_errors": 156,
+        "pooled_sample_size": 1881,
+        "qber_ci_low": 0.06344308625096409,
+        "qber_ci_high": 0.10582677004303462,
+        "qber_pvalue": 0.1891379335155599,
+        "sifted_fraction": 0.4953125,
+        "sifted_pvalue": 0.24857054382470173,
+        "true_qber_pvalue": 0.09805774190954253,
+        "dispersion_pvalue": 0.010330068792788432
+      },
+      "numpy": {
+        "expected_qber": 0.075,
+        "pooled_qber": 0.07604562737642585,
+        "pooled_errors": 1440,
+        "pooled_sample_size": 18936,
+        "qber_ci_low": 0.06985058075179397,
+        "qber_ci_high": 0.08258074843259065,
+        "qber_pvalue": 0.5810805654460439,
+        "sifted_fraction": 0.498828125,
+        "sifted_pvalue": 0.3596632120465508,
+        "true_qber_pvalue": 0.9617110934766846,
+        "dispersion_pvalue": 0.4365507139442055
+      },
+      "qiskit_vs_numpy": {
+        "chi2": 1.1470871139884324,
+        "pvalue": 0.2841597498280997,
+        "qber_a": 0.08293460925039872,
+        "qber_b": 0.07604562737642585
+      }
+    },
+    {
+      "alpha": 0.3,
+      "bit_flip": 0.02,
+      "expected_qber": 0.092,
+      "qiskit": {
+        "expected_qber": 0.092,
+        "pooled_qber": 0.07974481658692185,
+        "pooled_errors": 150,
+        "pooled_sample_size": 1881,
+        "qber_ci_low": 0.060635661242577,
+        "qber_ci_high": 0.10228160101817943,
+        "qber_pvalue": 0.0664888703471751,
+        "sifted_fraction": 0.4953125,
+        "sifted_pvalue": 0.24857054382470173,
+        "true_qber_pvalue": 0.8583429190786174,
+        "dispersion_pvalue": 0.6675025288173708
+      },
+      "numpy": {
+        "expected_qber": 0.092,
+        "pooled_qber": 0.08940642163075622,
+        "pooled_errors": 1693,
+        "pooled_sample_size": 18936,
+        "qber_ci_low": 0.08272175745346246,
+        "qber_ci_high": 0.09642030868544767,
+        "qber_pvalue": 0.22265691543882207,
+        "sifted_fraction": 0.498828125,
+        "sifted_pvalue": 0.3596632120465508,
+        "true_qber_pvalue": 0.2325909347585755,
+        "dispersion_pvalue": 0.5996507898426758
+      },
+      "qiskit_vs_numpy": {
+        "chi2": 1.979290368132114,
+        "pvalue": 0.15946518497522366,
+        "qber_a": 0.07974481658692185,
+        "qber_b": 0.08940642163075622
+      }
+    },
+    {
+      "alpha": 0.6,
+      "bit_flip": 0.0,
+      "expected_qber": 0.15,
+      "qiskit": {
+        "expected_qber": 0.15,
+        "pooled_qber": 0.15789473684210525,
+        "pooled_errors": 297,
+        "pooled_sample_size": 1881,
+        "qber_ci_low": 0.13137874277078146,
+        "qber_ci_high": 0.1871891713981476,
+        "qber_pvalue": 0.3328228083790741,
+        "sifted_fraction": 0.4953125,
+        "sifted_pvalue": 0.24857054382470173,
+        "true_qber_pvalue": 0.1354092746080011,
+        "dispersion_pvalue": 0.7805495478781403
+      },
+      "numpy": {
+        "expected_qber": 0.15,
+        "pooled_qber": 0.149503591043515,
+        "pooled_errors": 2831,
+        "pooled_sample_size": 18936,
+        "qber_ci_low": 0.1410915289361952,
+        "qber_ci_high": 0.1581963878567438,
+        "qber_pvalue": 0.8546723794605193,
+        "sifted_fraction": 0.498828125,
+        "sifted_pvalue": 0.3596632120465508,
+        "true_qber_pvalue": 0.40674375778355815,
+        "dispersion_pvalue": 0.6825260763598706
+      },
+      "qiskit_vs_numpy": {
+        "chi2": 0.9435560218062559,
+        "pvalue": 0.3313649986689578,
+        "qber_a": 0.15789473684210525,
+        "qber_b": 0.149503591043515
+      }
+    },
+    {
+      "alpha": 0.6,
+      "bit_flip": 0.02,
+      "expected_qber": 0.16399999999999998,
+      "qiskit": {
+        "expected_qber": 0.16399999999999998,
+        "pooled_qber": 0.1467304625199362,
+        "pooled_errors": 276,
+        "pooled_sample_size": 1881,
+        "qber_ci_low": 0.1210770373407361,
+        "qber_ci_high": 0.17525409088099045,
+        "qber_pvalue": 0.04297516063487772,
+        "sifted_fraction": 0.4953125,
+        "sifted_pvalue": 0.24857054382470173,
+        "true_qber_pvalue": 0.8526172443328193,
+        "dispersion_pvalue": 0.04615536490705995
+      },
+      "numpy": {
+        "expected_qber": 0.16399999999999998,
+        "pooled_qber": 0.16064638783269963,
+        "pooled_errors": 3042,
+        "pooled_sample_size": 18936,
+        "qber_ci_low": 0.15197598558480868,
+        "qber_ci_high": 0.16958856594438942,
+        "qber_pvalue": 0.21628969768988016,
+        "sifted_fraction": 0.498828125,
+        "sifted_pvalue": 0.3596632120465508,
+        "true_qber_pvalue": 0.9649800466060772,
+        "dispersion_pvalue": 0.9138318291964017
+      },
+      "qiskit_vs_numpy": {
+        "chi2": 2.4730320698941846,
+        "pvalue": 0.11581431789932792,
+        "qber_a": 0.1467304625199362,
+        "qber_b": 0.16064638783269963
+      }
+    },
+    {
+      "alpha": 1.0,
+      "bit_flip": 0.0,
+      "expected_qber": 0.25,
+      "qiskit": {
+        "expected_qber": 0.25,
+        "pooled_qber": 0.266347687400319,
+        "pooled_errors": 501,
+        "pooled_sample_size": 1881,
+        "qber_ci_low": 0.23353695531043128,
+        "qber_ci_high": 0.301051871496399,
+        "qber_pvalue": 0.1043299120437552,
+        "sifted_fraction": 0.4953125,
+        "sifted_pvalue": 0.24857054382470173,
+        "true_qber_pvalue": 0.3541002331279437,
+        "dispersion_pvalue": 0.8674283816843974
+      },
+      "numpy": {
+        "expected_qber": 0.25,
+        "pooled_qber": 0.24894381073088298,
+        "pooled_errors": 4714,
+        "pooled_sample_size": 18936,
+        "qber_ci_low": 0.23867953002001896,
+        "qber_ci_high": 0.25940902597805243,
+        "qber_pvalue": 0.7434745151359543,
+        "sifted_fraction": 0.498828125,
+        "sifted_pvalue": 0.3596632120465508,
+        "true_qber_pvalue": 0.2931528394061336,
+        "dispersion_pvalue": 0.3193785194575322
+      },
+      "qiskit_vs_numpy": {
+        "chi2": 2.760276515574202,
+        "pvalue": 0.09663153379851547,
+        "qber_a": 0.266347687400319,
+        "qber_b": 0.24894381073088298
+      }
+    },
+    {
+      "alpha": 1.0,
+      "bit_flip": 0.02,
+      "expected_qber": 0.26,
+      "qiskit": {
+        "expected_qber": 0.26,
+        "pooled_qber": 0.2636895268474216,
+        "pooled_errors": 496,
+        "pooled_sample_size": 1881,
+        "qber_ci_low": 0.23099662052434786,
+        "qber_ci_high": 0.2982974905910425,
+        "qber_pvalue": 0.7129398379868148,
+        "sifted_fraction": 0.4953125,
+        "sifted_pvalue": 0.24857054382470173,
+        "true_qber_pvalue": 0.704694673702088,
+        "dispersion_pvalue": 0.11502154132948862
+      },
+      "numpy": {
+        "expected_qber": 0.26,
+        "pooled_qber": 0.2562843261512463,
+        "pooled_errors": 4853,
+        "pooled_sample_size": 18936,
+        "qber_ci_low": 0.2459171970310361,
+        "qber_ci_high": 0.26684650810669286,
+        "qber_pvalue": 0.24616578848281126,
+        "sifted_fraction": 0.498828125,
+        "sifted_pvalue": 0.3596632120465508,
+        "true_qber_pvalue": 0.5810711884751889,
+        "dispersion_pvalue": 0.40818300265589
+      },
+      "qiskit_vs_numpy": {
+        "chi2": 0.49143047856774613,
+        "pvalue": 0.48328989374473563,
+        "qber_a": 0.2636895268474216,
+        "qber_b": 0.2562843261512463
+      }
+    }
+  ]
+}

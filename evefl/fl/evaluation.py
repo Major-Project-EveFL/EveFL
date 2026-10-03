@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -26,24 +26,27 @@ from evefl.fl.model import CHESTXRAY_LABELS, build_resnet18, get_device
 log = logging.getLogger(__name__)
 
 
-def _per_class_auc_roc(y_true: np.ndarray, y_score: np.ndarray) -> Dict[str, float]:
+def _per_class_auc_roc(y_true: np.ndarray, y_score: np.ndarray) -> Tuple[Dict[str, float], List[str]]:
     """
-    Per-pathology AUC-ROC.
+    Per-pathology AUC-ROC. Returns (per_class_auc, skipped_classes).
 
     A class is SKIPPED (not scored as 0, not scored as 0.5) if the
-    held-out split happens to contain only one label value for it —
-    AUC is mathematically undefined there, and on a small demo subset
-    this is common. Better to omit a number than fabricate one.
+    held-out split contains only one label value for it (no positives,
+    or no negatives) — AUC is mathematically undefined there, and on a
+    small demo subset this is common. Better to omit a number than
+    fabricate one; the skipped names are returned so they get logged.
     """
     from sklearn.metrics import roc_auc_score
 
     per_class: Dict[str, float] = {}
+    skipped: List[str] = []
     for i, label in enumerate(CHESTXRAY_LABELS):
         col = y_true[:, i]
         if len(np.unique(col)) < 2:
+            skipped.append(label)
             continue
         per_class[label] = float(roc_auc_score(col, y_score[:, i]))
-    return per_class
+    return per_class, skipped
 
 
 @torch.no_grad()
@@ -54,14 +57,18 @@ def evaluate_global_model(
     partition_root: Path,
     batch_size: int = 64,
     device: Optional[torch.device] = None,
-) -> Tuple[float, Dict[str, float]]:
+) -> Tuple[float, Dict[str, Any]]:
     """
     Load `ndarrays` into a fresh ResNet-18 and evaluate against the
-    shared IID test split written by `dataset.partition_and_save()`.
+    shared held-out test split written by `dataset.partition_and_save()`.
 
-    Returns (mean_bce_loss, metrics) where metrics includes
-    `mean_auc_roc` (averaged over classes with a defined AUC on this
-    split) and one `auc_<pathology>` entry per scorable class.
+    Returns (mean_bce_loss, metrics). `metrics` is JSON-ready:
+        macro_auc_roc     mean AUC over the scorable classes (NaN if none)
+        per_class_auc     {pathology: AUC} for scorable classes only
+        skipped_classes   pathologies with no positives (or no negatives)
+                          in the test split, which are left out of the macro
+        n_scored_classes, n_test_examples
+    Written verbatim into each round's `server_eval` entry of the results JSON.
     """
     device = device or get_device()
     model = build_resnet18(pretrained=False)
@@ -90,24 +97,32 @@ def evaluate_global_model(
 
     if total_examples == 0:
         log.warning("Global eval: test set was empty — check partition_root.")
-        return float("nan"), {"n_test_examples": 0}
+        return float("nan"), {"macro_auc_roc": float("nan"), "per_class_auc": {}, "skipped_classes": list(CHESTXRAY_LABELS),
+                              "n_scored_classes": 0, "n_test_examples": 0}
 
     mean_loss = total_loss / total_examples
     y_true = np.concatenate(all_targets, axis=0)
     y_score = np.concatenate(all_probs, axis=0)
 
-    per_class_auc = _per_class_auc_roc(y_true, y_score)
-    mean_auc = float(np.mean(list(per_class_auc.values()))) if per_class_auc else float("nan")
+    per_class_auc, skipped = _per_class_auc_roc(y_true, y_score)
+    macro_auc = float(np.mean(list(per_class_auc.values()))) if per_class_auc else float("nan")
 
-    metrics: Dict[str, float] = {"mean_auc_roc": mean_auc, "n_test_examples": total_examples}
-    metrics.update({f"auc_{label}": v for label, v in per_class_auc.items()})
+    metrics: Dict[str, Any] = {
+        "macro_auc_roc": macro_auc,
+        "per_class_auc": per_class_auc,
+        "skipped_classes": skipped,
+        "n_scored_classes": len(per_class_auc),
+        "n_test_examples": total_examples,
+    }
 
     log.info(
-        "Global eval | loss=%.4f mean_auc_roc=%s (n=%d, %d/%d classes scorable)",
+        "Global eval | loss=%.4f macro_auc_roc=%s (n=%d, %d/%d classes scored)",
         mean_loss,
-        f"{mean_auc:.4f}" if per_class_auc else "n/a",
+        f"{macro_auc:.4f}" if per_class_auc else "n/a",
         total_examples, len(per_class_auc), len(CHESTXRAY_LABELS),
     )
+    if skipped:
+        log.warning("Global eval | classes skipped (single-valued in test split): %s", ", ".join(skipped))
     return mean_loss, metrics
 
 
@@ -122,6 +137,10 @@ def make_evaluate_fn(
     """
     Build the `evaluate_fn` EveFLStrategy expects.
 
+    The runner calls this after EVERY round, LOCKDOWN rounds included (the
+    model is then the unchanged last good one), so the AUC curve shows the
+    flat stretches. Only raise `every_n_rounds` above 1 to save time.
+
     Set `every_n_rounds > 1` to skip most rounds during a fast demo run
     (a full forward pass over the test set on every single round adds
     up quickly on CPU/limited GPU time) while still always evaluating
@@ -129,7 +148,7 @@ def make_evaluate_fn(
     """
     device = get_device()
 
-    def evaluate_fn(server_round: int, ndarrays, config) -> Optional[Tuple[float, Dict[str, float]]]:
+    def evaluate_fn(server_round: int, ndarrays, config) -> Optional[Tuple[float, Dict[str, Any]]]:
         is_final_round = num_rounds is not None and server_round == num_rounds
         if every_n_rounds > 1 and server_round % every_n_rounds != 0 and not is_final_round:
             return None

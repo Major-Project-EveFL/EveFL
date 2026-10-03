@@ -13,14 +13,14 @@ Fix in order. Each fix needs a test.
   (max z = (n-1)/sqrt(n) = 1.155). It also measures full-parameter norm, not update-delta norm
   (paper says gradient norm). Use delta norms with robust statistics (median and MAD) or a
   bound relative to the median.
-- P0-3 No evaluation. `evaluate_fn=None`, client `evaluate()` returns NaN. Add server-side
+- P0-3 [FIXED: structured per-round macro/per-class AUC in results JSON via the sequential runner, LOCKDOWN rounds included, skipped classes listed; tests/test_evaluation.py] No evaluation. `evaluate_fn=None`, client `evaluate()` returns NaN. Add server-side
   macro AUC-ROC on the held-out test split (skip classes with no positives), plus per-class AUC.
 - P0-4 [FIXED in code: evefl/fl/partition.py, patient-level disjoint split, tests/test_partition.py. TODO: run scripts/audit_partition.py on the real data on Kaggle and update the paper text, see docs/paper_patches/partition_scheme.md] evefl/fl/dataset.py `_dirichlet_partition`. A multi-label image is added to every client
   that receives any of its positive classes, so partitions overlap. Splitting is per image, but
   ChestX-ray14 has multiple images per patient, so patients leak across train, test and clients.
   Also the code (class-wise Dirichlet) differs from the paper's description (per-sample p~Dir).
   Split by Patient ID, make partitions disjoint, document the exact scheme, fix the paper text.
-- P0-5 Model init. `pretrained=False` on server and clients, but the paper says ImageNet
+- P0-5 [FIXED: pretrained is an explicit --pretrained/--no-pretrained flag, offline weights via --pretrained-weights (scripts/cache_pretrained_weights.py), recorded with SHA-256 in every results JSON; clients no longer download weights] Model init. `pretrained=False` on server and clients, but the paper says ImageNet
   pretrained. Decide, apply to both, and make weights available offline on Kaggle.
 - P0-6 [FIXED: _stable_seed uses SHA-256] evefl/fl/strategy.py seed uses builtin `hash(client.cid)`, which changes per process
   (PYTHONHASHSEED). Runs are not reproducible. Use `int(cid)` or zlib.crc32.
@@ -35,7 +35,7 @@ Fix in order. Each fix needs a test.
   until wired. Wire it or fix the claims.
 - P1-2 BB84 post-processing. `sifted_key` includes publicly compared sample bits, and there is no
   error correction, no real privacy amplification and no authentication (see docs/03).
-- P1-3 Simulator has no channel noise. Add a depolarizing or bit-flip baseline. Without it,
+- P1-3 [PARTLY FIXED: ChannelModel with bit-flip noise, expected QBER e+(1-2e)alpha/4 tested; false-alarm rates still to be measured by the sample-size sweep, docs/06] Simulator has no channel noise. Add a depolarizing or bit-flip baseline. Without it,
   false-alarm behaviour and SECURE-band statistics are meaningless.
 - P1-4 QBER estimated on a 25% sample (about 128 bits at n=1024). Statistical noise is large. At
   alpha=0.10 (mean 2.5%), a single client exceeds 5% about 3.6% of the time, and about 10% for
@@ -54,7 +54,7 @@ Fix in order. Each fix needs a test.
   inflation is called fabricated in tests/test_ckks.py. QKDFL comparison numbers are invented.
   Replace with measured results and reimplement QKDFL as a baseline. MIA numbers must be measured
   on our models.
-- P1-8 Optimiser and schedule. Paper says AdamW, cosine annealing, lr 5e-4 in CAUTION. Code uses
+- P1-8 [FIXED: AdamW, cosine over the GLOBAL round sent in the round config, x0.5 in CAUTION, base lr 1e-3 (old code actually used Adam 1e-4), all recorded in the results JSON; tests/test_schedule.py] Optimiser and schedule. Paper says AdamW, cosine annealing, lr 5e-4 in CAUTION. Code uses
   Adam 1e-3 constant.
 - P1-9 CKKS and Groth16 are not integrated. See docs/03 for the design gaps.
 - P1-10 Citations. 11% attributed inconsistently (Lo et al. vs Shor-Preskill; cite Shor and
@@ -64,11 +64,11 @@ Fix in order. Each fix needs a test.
   especially QKDFL, FedSec, "FedMed" (Roth et al.) and Kaissis et al. (Lancet Digital Health).
 
 ## P2 (engineering and docs)
-- P2-1 evefl/demo_validation.py is broken (`eavesdropper_active` kwarg no longer exists). README
+- P2-1 [PARTLY FIXED: demo_validation.py and the README quick-start now use the real API; README status table still stale] evefl/demo_validation.py is broken (`eavesdropper_active` kwarg no longer exists). README
   quick-start uses `eve_intercept_rate` (nonexistent) and shows a wrong example output. README
   status table is stale. quantum/base.py docstring is stale.
 - P2-2 bb84.py ValueError message missing f-string prefix.
-- P2-3 BB84 runs one Aer job per qubit (up to two), taking seconds per client-round, not the
+- P2-3 [FIXED: exact vectorised backend bb84_numpy (default), Qiskit kept as reference and cross-checked by tests/test_backend_crosscheck.py + scripts/validate_backends.py] BB84 runs one Aer job per qubit (up to two), taking seconds per client-round, not the
   paper's 180 ms. Add a vectorised numpy backend and keep Qiskit for cross-validation.
 - P2-4 State machine has no hysteresis. Add it plus property tests.
 - P2-5 `min_available_clients=max(num_clients,3)` can hang for num_clients<3. Flower

@@ -29,7 +29,7 @@ dashboard/  scripts/  tests/  docs/  docker/  .github/workflows/
 @dataclass(frozen=True)
 class ChannelModel:
     intercept_probability: float = 0.0   # Eve alpha
-    depolarizing_noise: float = 0.0      # baseline channel noise (fraction)
+    bit_flip_probability: float = 0.0     # baseline noise: independent flip on Bob's result, after Eve
 
 class QKDProtocol(ABC):
     def run_exchange(self, n_qubits: int, channel: ChannelModel, *, seed: int) -> QKDResult: ...

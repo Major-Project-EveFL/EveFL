@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint and types (ruff, mypy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      # Only the tools; mypy is configured to check the typed core, which has no heavy dependencies.
+      - run: pip install ruff==0.6.9 mypy==1.13.0 pandas-stubs types-PyYAML numpy
+
+      - run: ruff check .
+
+      - run: mypy
+
+  tests:
+    name: Tests (Python 3.12, no ZK toolchain)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install CPU-only torch first (the pinned CUDA wheels are ~2.5 GB)
+        run: pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install project
+        run: |
+          pip install -r requirements.txt
+          pip install -e .
+
+      # --require-optional-tools turns "skipped because tool missing" into a failure, so a green
+      # run means every selected test really ran. The ZK tests run in their own job below.
+      - name: Run tests
+        run: python -m pytest -q -m "not zk and not slow" --require-optional-tools
+
+  zk-tests:
+    name: Groth16 tests (circom 0.5 + snarkjs)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      # groth16.py drives the legacy JS circom 0.5.x, which needs a matching older snarkjs.
+      - name: Install circom and snarkjs
+        run: |
+          npm install -g circom@0.5.46 snarkjs@0.4.27
+          circom --version
+          snarkjs --help | head -3
+
+      - name: Install project (tests/conftest.py imports evefl.fl, so torch is needed here too)
+        run: |
+          pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Run ZK tests
+        run: python -m pytest -q -m zk --require-optional-tools

@@ -1,0 +1,430 @@
+{
+ "generated_utc": "2026-10-03T08:07:21+00:00",
+ "label": "simulated; keys are not secret (simulation seed)",
+ "eps_sec": 1e-10,
+ "eps_cor": 1e-15,
+ "rows": [
+  {
+   "channel": "alpha=0,e=1%",
+   "n_qubits": 1024,
+   "sample_fraction": 0.1,
+   "trials": 3,
+   "keys_produced": 0,
+   "statuses": [
+    "abort_ec_verification",
+    "no_key"
+   ],
+   "key_bits_mean": 0,
+   "key_bits_per_qubit": 0.0,
+   "cascade_efficiency_mean": null,
+   "seconds_mean": 0.001907030741373698
+  },
+  {
+   "channel": "alpha=0,e=1%",
+   "n_qubits": 4096,
+   "sample_fraction": 0.1,
+   "trials": 3,
+   "keys_produced": 0,
+   "statuses": [
+    "no_key"
+   ],
+   "key_bits_mean": 0,
+   "key_bits_per_qubit": 0.0,
+   "cascade_efficiency_mean": null,
+   "seconds_mean": 0.00991511344909668
+  },
+  {
+   "channel": "alpha=0,e=1%",
+   "n_qubits": 8192,
+   "sample_fraction": 0.1,
+   "trials": 3,
+   "keys_produced": 3,
+   "statuses": [
+    "ok"
+   ],
+   "key_bits_mean": 154.66666666666666,
+   "key_bits_per_qubit": 0.018880208333333332,
+   "cascade_efficiency_mean": 1.0279768454659937,
+   "seconds_mean": 0.026623328526814777
+  },
+  {
+   "channel": "alpha=0,e=1%",
+   "n_qubits": 16384,
+   "sample_fraction": 0.1,
+   "trials": 3,
+   "keys_produced": 3,
+   "statuses": [
+    "ok"
+   ],
+   "key_bits_mean": 1373.3333333333333,
+   "key_bits_per_qubit": 0.08382161458333333,
+   "cascade_efficiency_mean": 1.7752664319471358,
+   "seconds_mean": 0.04065267244974772
+  },
+  {
+   "channel": "alpha=0,e=1%",
+   "n_qubits": 32768,
+   "sample_fraction": 0.1,
+   "trials": 3,
+   "keys_produced": 3,
+   "statuses": [
+    "ok"
+   ],
+   "key_bits_mean": 4530.666666666667,
+   "key_bits_per_qubit": 0.13826497395833334,
+   "cascade_efficiency_mean": 1.1916121276090637,
+   "seconds_mean": 0.06954757372538249
+  },
+  {
+   "channel": "alpha=0,e=1%",
+   "n_qubits": 65536,
+   "sample_fraction": 0.1,
+   "trials": 3,
+   "keys_produced": 3,
+   "statuses": [
+    "ok"
+   ],
+   "key_bits_mean": 12466.666666666666,
+   "key_bits_per_qubit": 0.19022623697916666,
+   "cascade_efficiency_mean": 1.0632160210252335,
+   "seconds_mean": 0.176512082417806
+  },
+  {
+   "channel": "alpha=0,e=1%",
+   "n_qubits": 131072,
+   "sample_fraction": 0.1,
+   "trials": 3,
+   "keys_produced": 3,
+   "statuses": [
+    "ok"
+   ],
+   "key_bits_mean": 30885.333333333332,
+   "key_bits_per_qubit": 0.23563639322916666,
+   "cascade_efficiency_mean": 1.318579746087928,
+   "seconds_mean": 0.3432298501332601
+  },
+  {
+   "channel": "alpha=0,e=1%",
+   "n_qubits": 262144,
+   "sample_fraction": 0.1,
+   "trials": 3,
+   "keys_produced": 3,
+   "statuses": [
+    "ok"
+   ],
+   "key_bits_mean": 70338.66666666667,
+   "key_bits_per_qubit": 0.2683207194010417,
+   "cascade_efficiency_mean": 1.229235608426631,
+   "seconds_mean": 0.6621432304382324
+  },
+  {
+   "channel": "alpha=0,e=1%",
+   "n_qubits": 524288,
+   "sample_fraction": 0.1,
+   "trials": 3,
+   "keys_produced": 3,
+   "statuses": [
+    "ok"
+   ],
+   "key_bits_mean": 153712.0,
+   "key_bits_per_qubit": 0.293182373046875,
+   "cascade_efficiency_mean": 1.132252518292737,
+   "seconds_mean": 1.3543144067128499
+  },
+  {
+   "channel": "alpha=0,e=1%",
+   "n_qubits": 1048576,
+   "sample_fraction": 0.1,
+   "trials": 3,
+   "keys_produced": 3,
+   "statuses": [
+    "ok"
+   ],
+   "key_bits_mean": 327600.0,
+   "key_bits_per_qubit": 0.3124237060546875,
+   "cascade_efficiency_mean": 1.1232924965873101,
+   "seconds_mean": 3.0377262433369956
+  },
+  {
+   "channel": "alpha=0.1,e=0",
+   "n_qubits": 1024,
+   "sample_fraction": 0.1,
+   "trials": 3,
+   "keys_produced": 0,
+   "statuses": [
+    "abort_ec_verification",
+    "no_key"
+   ],
+   "key_bits_mean": 0,
+   "key_bits_per_qubit": 0.0,
+   "cascade_efficiency_mean": null,
+   "seconds_mean": 0.003725449244181315
+  },
+  {
+   "channel": "alpha=0.1,e=0",
+   "n_qubits": 4096,
+   "sample_fraction": 0.1,
+   "trials": 3,
+   "keys_produced": 0,
+   "statuses": [
+    "no_key"
+   ],
+   "key_bits_mean": 0,
+   "key_bits_per_qubit": 0.0,
+   "cascade_efficiency_mean": null,
+   "seconds_mean": 0.014434734980265299
+  },
+  {
+   "channel": "alpha=0.1,e=0",
+   "n_qubits": 8192,
+   "sample_fraction": 0.1,
+   "trials": 3,
+   "keys_produced": 0,
+   "statuses": [
+    "no_key"
+   ],
+   "key_bits_mean": 0,
+   "key_bits_per_qubit": 0.0,
+   "cascade_efficiency_mean": null,
+   "seconds_mean": 0.026083866755167644
+  },
+  {
+   "channel": "alpha=0.1,e=0",
+   "n_qubits": 16384,
+   "sample_fraction": 0.1,
+   "trials": 3,
+   "keys_produced": 3,
+   "statuses": [
+    "ok"
+   ],
+   "key_bits_mean": 336.0,
+   "key_bits_per_qubit": 0.0205078125,
+   "cascade_efficiency_mean": 1.5173516395072617,
+   "seconds_mean": 0.04515814781188965
+  },
+  {
+   "channel": "alpha=0.1,e=0",
+   "n_qubits": 32768,
+   "sample_fraction": 0.1,
+   "trials": 3,
+   "keys_produced": 3,
+   "statuses": [
+    "ok"
+   ],
+   "key_bits_mean": 2520.0,
+   "key_bits_per_qubit": 0.076904296875,
+   "cascade_efficiency_mean": 1.2840764614661706,
+   "seconds_mean": 0.0990763505299886
+  },
+  {
+   "channel": "alpha=0.1,e=0",
+   "n_qubits": 65536,
+   "sample_fraction": 0.1,
+   "trials": 3,
+   "keys_produced": 3,
+   "statuses": [
+    "ok"
+   ],
+   "key_bits_mean": 8016.0,
+   "key_bits_per_qubit": 0.122314453125,
+   "cascade_efficiency_mean": 1.1679842014252693,
+   "seconds_mean": 0.18892200787862143
+  },
+  {
+   "channel": "alpha=0.1,e=0",
+   "n_qubits": 131072,
+   "sample_fraction": 0.1,
+   "trials": 3,
+   "keys_produced": 3,
+   "statuses": [
+    "ok"
+   ],
+   "key_bits_mean": 21072.0,
+   "key_bits_per_qubit": 0.1607666015625,
+   "cascade_efficiency_mean": 1.2052492826063321,
+   "seconds_mean": 0.4796284039815267
+  },
+  {
+   "channel": "alpha=0.1,e=0",
+   "n_qubits": 262144,
+   "sample_fraction": 0.1,
+   "trials": 3,
+   "keys_produced": 3,
+   "statuses": [
+    "ok"
+   ],
+   "key_bits_mean": 50165.333333333336,
+   "key_bits_per_qubit": 0.19136555989583334,
+   "cascade_efficiency_mean": 1.1767897499986686,
+   "seconds_mean": 0.8889249165852865
+  },
+  {
+   "channel": "alpha=0.1,e=0",
+   "n_qubits": 524288,
+   "sample_fraction": 0.1,
+   "trials": 3,
+   "keys_produced": 3,
+   "statuses": [
+    "ok"
+   ],
+   "key_bits_mean": 113461.33333333333,
+   "key_bits_per_qubit": 0.21641031901041666,
+   "cascade_efficiency_mean": 1.195808763523358,
+   "seconds_mean": 1.733290433883667
+  },
+  {
+   "channel": "alpha=0.1,e=0",
+   "n_qubits": 1048576,
+   "sample_fraction": 0.1,
+   "trials": 3,
+   "keys_produced": 3,
+   "statuses": [
+    "ok"
+   ],
+   "key_bits_mean": 247666.66666666666,
+   "key_bits_per_qubit": 0.2361933390299479,
+   "cascade_efficiency_mean": 1.2230367030369171,
+   "seconds_mean": 3.2643190224965415
+  },
+  {
+   "channel": "alpha=0.2,e=1%",
+   "n_qubits": 1024,
+   "sample_fraction": 0.1,
+   "trials": 3,
+   "keys_produced": 0,
+   "statuses": [
+    "no_key"
+   ],
+   "key_bits_mean": 0,
+   "key_bits_per_qubit": 0.0,
+   "cascade_efficiency_mean": null,
+   "seconds_mean": 0.008616129557291666
+  },
+  {
+   "channel": "alpha=0.2,e=1%",
+   "n_qubits": 4096,
+   "sample_fraction": 0.1,
+   "trials": 3,
+   "keys_produced": 0,
+   "statuses": [
+    "no_key"
+   ],
+   "key_bits_mean": 0,
+   "key_bits_per_qubit": 0.0,
+   "cascade_efficiency_mean": null,
+   "seconds_mean": 0.018270254135131836
+  },
+  {
+   "channel": "alpha=0.2,e=1%",
+   "n_qubits": 8192,
+   "sample_fraction": 0.1,
+   "trials": 3,
+   "keys_produced": 0,
+   "statuses": [
+    "no_key"
+   ],
+   "key_bits_mean": 0,
+   "key_bits_per_qubit": 0.0,
+   "cascade_efficiency_mean": null,
+   "seconds_mean": 0.03989362716674805
+  },
+  {
+   "channel": "alpha=0.2,e=1%",
+   "n_qubits": 16384,
+   "sample_fraction": 0.1,
+   "trials": 3,
+   "keys_produced": 0,
+   "statuses": [
+    "no_key"
+   ],
+   "key_bits_mean": 0,
+   "key_bits_per_qubit": 0.0,
+   "cascade_efficiency_mean": null,
+   "seconds_mean": 0.07689778010050456
+  },
+  {
+   "channel": "alpha=0.2,e=1%",
+   "n_qubits": 32768,
+   "sample_fraction": 0.1,
+   "trials": 3,
+   "keys_produced": 0,
+   "statuses": [
+    "no_key"
+   ],
+   "key_bits_mean": 0,
+   "key_bits_per_qubit": 0.0,
+   "cascade_efficiency_mean": null,
+   "seconds_mean": 0.15092047055562338
+  },
+  {
+   "channel": "alpha=0.2,e=1%",
+   "n_qubits": 65536,
+   "sample_fraction": 0.1,
+   "trials": 3,
+   "keys_produced": 0,
+   "statuses": [
+    "no_key"
+   ],
+   "key_bits_mean": 0,
+   "key_bits_per_qubit": 0.0,
+   "cascade_efficiency_mean": null,
+   "seconds_mean": 0.2972706158955892
+  },
+  {
+   "channel": "alpha=0.2,e=1%",
+   "n_qubits": 131072,
+   "sample_fraction": 0.1,
+   "trials": 3,
+   "keys_produced": 3,
+   "statuses": [
+    "ok"
+   ],
+   "key_bits_mean": 2762.6666666666665,
+   "key_bits_per_qubit": 0.021077473958333332,
+   "cascade_efficiency_mean": 1.2729099716416707,
+   "seconds_mean": 0.8546508948008219
+  },
+  {
+   "channel": "alpha=0.2,e=1%",
+   "n_qubits": 262144,
+   "sample_fraction": 0.1,
+   "trials": 3,
+   "keys_produced": 3,
+   "statuses": [
+    "ok"
+   ],
+   "key_bits_mean": 12365.333333333334,
+   "key_bits_per_qubit": 0.047170003255208336,
+   "cascade_efficiency_mean": 1.2551930528358917,
+   "seconds_mean": 1.3374203046162922
+  },
+  {
+   "channel": "alpha=0.2,e=1%",
+   "n_qubits": 524288,
+   "sample_fraction": 0.1,
+   "trials": 3,
+   "keys_produced": 3,
+   "statuses": [
+    "ok"
+   ],
+   "key_bits_mean": 34296.0,
+   "key_bits_per_qubit": 0.0654144287109375,
+   "cascade_efficiency_mean": 1.2468084268191588,
+   "seconds_mean": 2.6711747646331787
+  },
+  {
+   "channel": "alpha=0.2,e=1%",
+   "n_qubits": 1048576,
+   "sample_fraction": 0.1,
+   "trials": 3,
+   "keys_produced": 3,
+   "statuses": [
+    "ok"
+   ],
+   "key_bits_mean": 87165.33333333333,
+   "key_bits_per_qubit": 0.08312733968098958,
+   "cascade_efficiency_mean": 1.2666060426684356,
+   "seconds_mean": 5.625020742416382
+  }
+ ]
+}

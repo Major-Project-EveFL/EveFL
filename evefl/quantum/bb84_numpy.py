@@ -35,10 +35,13 @@ class BB84NumpyProtocol(QKDProtocol):
         self,
         sample_fraction: float = 0.25,
         seed: int | np.random.SeedSequence | None = None,
+        record_eve_view: bool = False,
     ):
         if not 0.0 < sample_fraction <= 1.0:
             raise ValueError(f"sample_fraction must be in (0, 1], got {sample_fraction}")
         self._sample_fraction = sample_fraction
+        # Simulation only: also record which sifted bits Eve knows exactly (for validating key lengths).
+        self._record_eve_view = record_eve_view
         if isinstance(seed, np.random.SeedSequence):
             self._root = seed
         else:
@@ -102,11 +105,15 @@ class BB84NumpyProtocol(QKDProtocol):
             sample_idx = rng["sample"].choice(n_sifted, size=sample_size, replace=False)
             sample_errors = int(errors[sample_idx].sum())
             qber = sample_errors / sample_size
+            sample_positions = sorted(int(i) for i in sample_idx)
         else:
             sample_size, sample_errors, qber = 0, 0, 0.0
+            sample_positions = []
 
         return QKDResult(
             sifted_key=sifted_alice.tolist(),
+            bob_sifted_key=sifted_bob.tolist(),
+            sample_indices=sample_positions,
             qber=qber,
             n_qubits_sent=n,
             n_sifted=n_sifted,
@@ -124,5 +131,10 @@ class BB84NumpyProtocol(QKDProtocol):
                 # must only ever use `qber` (the sampled estimate).
                 "sim_only_true_error_count": true_errors,
                 "sim_only_true_qber": true_errors / n_sifted if n_sifted else 0.0,
+                **(
+                    {"sim_only_eve_known_positions": np.flatnonzero(
+                        (intercepted & (eve_bases == alice_bases))[sifted]).tolist()}
+                    if self._record_eve_view else {}
+                ),
             },
         )

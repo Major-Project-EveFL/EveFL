@@ -33,7 +33,7 @@ Fix in order. Each fix needs a test.
 - P1-1 The BB84 key never protects the FL traffic. AES-GCM is not called anywhere in the FL path.
   README ("encrypted gradients") and dashboard footer ("only AES-256-GCM is active") are wrong
   until wired. Wire it or fix the claims.
-- P1-2 BB84 post-processing. `sifted_key` includes publicly compared sample bits, and there is no
+- P1-2 [FIXED in code: evefl/quantum/postprocess.py (sample discarded, Cascade with counted leakage, verification hash, Toeplitz privacy amplification with the finite-key bound, HMAC authentication), tests/test_postprocess.py, docs/paper_patches/post_processing.md. NOT wired into the FL path yet (Phase 4). Headline 1024-qubit blocks yield no key.] BB84 post-processing. `sifted_key` includes publicly compared sample bits, and there is no
   error correction, no real privacy amplification and no authentication (see docs/03).
 - P1-3 [PARTLY FIXED: ChannelModel with bit-flip noise, expected QBER e+(1-2e)alpha/4 tested; false-alarm rates still to be measured by the sample-size sweep, docs/06] Simulator has no channel noise. Add a depolarizing or bit-flip baseline. Without it,
   false-alarm behaviour and SECURE-band statistics are meaningless.

@@ -73,6 +73,11 @@ class UpdateVerifier(ABC):               # plain norm check | zk norm proof
 7. Server evaluates on the held-out test set (macro AUC-ROC) and logs metrics.
 8. Telemetry and audit record for the round (hash-chained).
 
+## Decision (ADR 0001): separate key block
+Step 1 of the per-round sequence runs two exchanges per client: the controller's small QBER block and a larger key block with
+independent random streams (`evefl/quantum/round_keys.py`). A failed key exchange discards the round like LOCKDOWN with a
+separate reason (`evefl/orchestration/policy.py`). See docs/adr/0001-key-block-separate-from-controller-block.md.
+
 ## Design constraints that must be resolved
 - Anomaly screening needs update norms. Under server-blind aggregation the server cannot compute
   them, so norms come from the verified proof (or from a secure norm-check protocol), not from

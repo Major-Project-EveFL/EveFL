@@ -47,3 +47,27 @@ detector side channels (blinding), simulation only.
   knows). At alpha >= 0.3 with 2^17 qubits there is no key, and at alpha = 0.5 the round aborts (QBER above 0.11).
 - Rounds without a key are treated like LOCKDOWN by the orchestration policy (`evefl/orchestration/policy.py`), with the
   separate reason `no_key`; the pure controller stays unaware of key length.
+
+## Decision recorded (ADR 0001): the key comes from its own block
+The controller keeps its 1024-qubit exchange for the QBER signal; the key is generated on a separate, larger exchange
+(`evefl/quantum/round_keys.py`, default 2^17 qubits, sample fraction 0.1, independent random streams). See
+`docs/adr/0001-key-block-separate-from-controller-block.md`. The two QBERs are different measurements, so the controller can
+say SECURE while key generation aborts or yields no key; that round is then discarded with reason `no_key` / `key_abort`
+(tested). Option 2, one large block for both, is a later ablation.
+
+## Paper text to replace or add
+1. **Replace the claim that 1024 photons per round produce an AES key** (Algorithm 2 derives the AES-256-GCM key from the BB84
+   sifted key with n = 1024). Say instead: 1024-qubit blocks are good for detection (Theorem 1, Table III) but yield no
+   secret key at eps_sec = 1e-10, because the finite-key penalty exceeds the key at any error rate; blocks of at least
+   about 10^4 qubits are needed (8,192 qubits give about 155 bits with 1% noise; 2^17 give about 31,000 bits, 0.24 per qubit,
+   against the 256 bits AES needs). Cite `docs/validation/key_rates.json` and label it simulated.
+2. **Weak Eve is a result.** In simulation, using the simulator's ground truth of which bits an intercept-resend Eve knows,
+   the key length stayed below the entropy she left in every trial for alpha from 0.05 to 0.2. State the assumption: the
+   channels are basis-symmetric (intercept-resend with random basis, bit flips) and the bound is used in its random-sample
+   form; this is NOT a proof against general attacks.
+3. **Limitations section, plainly:** simulation keys are determined by the simulation seed, so they are not secret; the
+   classical channel is authenticated with HMAC-SHA256 (computational), not Wegman-Carter (information-theoretic);
+   single-photon sources, no detector side channels such as blinding.
+4. **Known inefficiency:** Cascade leaks 1.3 to 1.4 times the ideal n h(Q), above the 1.1 assumed in the finite-key literature;
+   better reconciliation protocols (for example LDPC-based) would raise the key rates. Report the rates as they are.
+5. **Do not claim** that the controller's SECURE state implies a key exists, or that its QBER describes the key block.

@@ -51,6 +51,10 @@ Status: `[ ]` open, `[~]` code done / paper text pending, `[x]` paper updated.
   result with its assumption; limitations (not-secret simulation keys, HMAC not Wegman-Carter); Cascade inefficiency. Details in
   `post_processing.md`, decision in `docs/adr/0001-key-block-separate-from-controller-block.md`.
 
+- [~] **Per-client decisions, hysteresis, policy-mode comparison (Phase 2).** `phase2_per_client.md`: the central claim
+  with its honest limits (rounds, not accuracy; selective exclusion; screening inactive below 3 updates), hysteresis as stability
+  not accuracy, system-level vs per-link false-CAUTION figures. Phase 5 must add the accuracy and participation results.
+
 ## Claims that are not measured yet
 - [ ] **Measured vs projected labels.** Every Section VIII number (AUC, MIA, overhead, Table IV)
   is projected. Label each "projected" or replace it with a measured value from a results file.

@@ -44,7 +44,7 @@ Fix in order. Each fix needs a test.
   the theorem for the actual sample size m and use the exact binomial tail. At m=128 and
   alpha=0.66, single-client miss probability is about 4.7% (marginal), and about 1e-4 for max
   over three independent links.
-- P1-5 "Graduated beats binary" claim. Both EveFL and QKDFL lock at 11%, so for static alpha>=0.44
+- P1-5 [CODE AND CONTROL-PLANE RESULTS DONE: per-client exclusion + per-link attacks (Phase 2), docs/adr/0002, docs/paper_patches/phase2_per_client.md; the ACCURACY comparison (B2 vs B3 vs B4 training runs) is Phase 5] "Graduated beats binary" claim. Both EveFL and QKDFL lock at 11%, so for static alpha>=0.44
   EveFL also halts almost every round. The paper's "about 18 of 50 rounds skipped, AUC 0.773 at
   alpha=0.6" and "36% / 64% rounds discarded" are not derivable from the design. Redesign the
   experiment (per-client links, intermittent or step Eve) or remove the claim.
@@ -70,7 +70,7 @@ Fix in order. Each fix needs a test.
 - P2-2 bb84.py ValueError message missing f-string prefix.
 - P2-3 [FIXED: exact vectorised backend bb84_numpy (default), Qiskit kept as reference and cross-checked by tests/test_backend_crosscheck.py + scripts/validate_backends.py] BB84 runs one Aer job per qubit (up to two), taking seconds per client-round, not the
   paper's 180 ms. Add a vectorised numpy backend and keep Qiskit for cross-validation.
-- P2-4 State machine has no hysteresis. Add it plus property tests.
+- P2-4 [FIXED: HysteresisConfig (immediate escalation, slow de-escalation), property tests, 100% branch coverage of the controller and policy modules] State machine has no hysteresis. Add it plus property tests.
 - P2-5 `min_available_clients=max(num_clients,3)` can hang for num_clients<3. Flower
   `start_simulation` is deprecated in newer versions. Plan the migration.
 - P2-6 Missing tests. Strategy, client, dataset, aggregation, integration, docs build.

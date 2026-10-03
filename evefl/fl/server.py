@@ -58,6 +58,7 @@ import numpy as np
 import torch
 from flwr.common import ndarrays_to_parameters
 
+from evefl import environment as _environment
 from evefl.fl.channels import ChannelPlan, build_plan
 from evefl.fl.client import DEFAULT_LR, DEFAULT_WEIGHT_DECAY, create_client_fn, get_model_parameters
 from evefl.fl.dataset import partition_and_save
@@ -380,6 +381,8 @@ def build_experiment_log(
         "experiment": {
             **config,
             "config_hash": config_hash,
+            # Provenance only (library versions): deliberately NOT part of `config`, so the hash is machine-independent.
+            "environment": _environment.runtime_environment(),
             "init_weights": init_weights,
             "elapsed_seconds": elapsed_seconds,
             "execution_engine": "sequential (Ray-free)",

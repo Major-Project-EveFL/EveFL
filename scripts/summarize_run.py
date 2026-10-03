@@ -39,6 +39,13 @@ def _channel_line(plan: Dict[str, Any] | None) -> str:
             f"attacks on links: {attacks}")
 
 
+def _environment_line(env: Dict[str, Any] | None) -> str:
+    if not env:
+        return "n/a"
+    libs = " ".join(f"{name} {version}" for name, version in (env.get("libraries") or {}).items() if version)
+    return f"python {env.get('python')} {env.get('system')}/{env.get('machine')}  {libs}"
+
+
 def _exclusion_line(counts: Dict[str, int] | None) -> str:
     if counts is None:
         return "n/a"
@@ -59,6 +66,7 @@ def summarize(report: Dict[str, Any]) -> List[str]:
         f"seed / rounds   : {exp['seed']} / {exp['num_rounds']}   clients={exp['num_clients']}  "
         f"local_epochs={exp['local_epochs']}  batch={exp['batch_size']}",
         f"pretrained      : {exp.get('pretrained')}  weights={exp.get('init_weights', {}).get('source')}",
+        f"environment     : {_environment_line(exp.get('environment'))}",
         f"qkd             : {exp.get('qkd')}",
         f"optimizer       : {exp.get('optimizer')}",
         f"policy          : {_policy_line(exp.get('policy'))}",

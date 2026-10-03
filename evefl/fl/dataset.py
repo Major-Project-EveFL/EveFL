@@ -244,6 +244,9 @@ def partition_and_save(
         "n_test": int(len(split.test_indices)),
         "hospital_sizes": [int(len(idx)) for idx in split.client_indices],
         "dominant_group_counts": {str(k): v for k, v in split.dominant_group_counts.items()},
+        # The split draws from numpy's Generator (permutation, dirichlet), whose streams NumPy does not guarantee to be
+        # identical across versions: a different version can give a different split and so different index_sha256.
+        "numpy_version": np.__version__,
         "index_sha256": _index_hashes(partition_root),
         "audit": audit,
     }

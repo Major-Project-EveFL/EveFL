@@ -14,7 +14,10 @@ Scheme (this is what the paper must describe)
 1. Group images by `Patient ID`. A patient's label vector is the union of the
    labels over all their images.
 2. Held-out test set: a random `test_fraction` of *patients* (IID w.r.t. label),
-   disjoint from every hospital.
+   disjoint from every hospital. A validation set (`val_fraction` of patients, also disjoint from the
+   test set and every hospital) is held out the same way: it is for model selection (choosing rounds,
+   learning rates, thresholds). The test set is for the final report ONLY and must never be used to pick
+   anything.
 3. Each remaining patient gets ONE dominant label:
      * the patient's RAREST positive label, where rarity is the number of
        patients (in the pool being partitioned) positive for that label;
@@ -36,8 +39,8 @@ Only numpy here: no torch, no images, no quantum code.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Dict, List, Sequence
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Sequence
 
 import numpy as np
 
@@ -55,6 +58,8 @@ class PatientSplit:
     n_patients_test: int
     n_patients_per_client: List[int]
     dominant_group_counts: Dict[int, int]  # over the patients partitioned into hospitals
+    val_indices: np.ndarray = field(default_factory=lambda: np.zeros(0, dtype=np.int64))
+    n_patients_val: int = 0
 
 
 def patient_label_matrix(patient_ids: np.ndarray, labels: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -137,10 +142,16 @@ def split_by_patient(
     seed: int,
     subset_fraction: float = 1.0,
     min_patients_per_client: int = 1,
+    val_fraction: float = 0.0,
 ) -> PatientSplit:
-    """Full pipeline: subset -> test split -> Dirichlet hospital split, all by patient."""
+    """Full pipeline: subset -> test split -> validation split -> Dirichlet hospital split, all by patient."""
     if not 0.0 <= test_fraction < 1.0:
         raise ValueError(f"test_fraction must be in [0, 1), got {test_fraction}")
+    if not 0.0 <= val_fraction < 1.0 or test_fraction + val_fraction >= 1.0:
+        raise ValueError(
+            f"val_fraction must be in [0, 1) and test_fraction + val_fraction < 1, got "
+            f"val_fraction={val_fraction}, test_fraction={test_fraction}"
+        )
     if not 0.0 < subset_fraction <= 1.0:
         raise ValueError(f"subset_fraction must be in (0, 1], got {subset_fraction}")
     if len(patient_ids) != len(labels):
@@ -158,7 +169,11 @@ def split_by_patient(
     if test_fraction > 0:
         n_test = max(1, n_test)
     test_pos = order[:n_test]
-    train_pos = order[n_test:]
+    n_val = int(round(n_used * val_fraction))
+    if val_fraction > 0:
+        n_val = max(1, n_val)
+    val_pos = order[n_test:n_test + n_val]
+    train_pos = order[n_test + n_val:]
 
     dominant = dominant_labels(patient_labels[train_pos])
     local_partition = dirichlet_patient_partition(
@@ -173,6 +188,8 @@ def split_by_patient(
     return PatientSplit(
         client_indices=[rows_of(pos) for pos in client_patient_pos],
         test_indices=rows_of(test_pos),
+        val_indices=rows_of(val_pos),
+        n_patients_val=int(n_val),
         n_patients_total=n_total,
         n_patients_used=n_used,
         n_patients_test=int(n_test),
@@ -186,6 +203,7 @@ def audit_partition(
     labels: np.ndarray,
     client_indices: Sequence[np.ndarray],
     test_indices: np.ndarray,
+    val_indices: Optional[np.ndarray] = None,
 ) -> dict:
     """Overlap counts and label statistics for a saved partition.
 
@@ -194,7 +212,11 @@ def audit_partition(
     per-class positive counts, so the Dirichlet skew can be eyeballed.
     """
     names = [f"hospital_{i}" for i in range(len(client_indices))] + ["test"]
-    sets = [np.asarray(idx, dtype=np.int64) for idx in list(client_indices) + [test_indices]]
+    held_out = [test_indices]
+    if val_indices is not None:
+        names.append("val")
+        held_out.append(val_indices)
+    sets = [np.asarray(idx, dtype=np.int64) for idx in list(client_indices) + held_out]
     patient_sets = [set(np.unique(patient_ids[idx]).tolist()) for idx in sets]
     image_sets = [set(idx.tolist()) for idx in sets]
 

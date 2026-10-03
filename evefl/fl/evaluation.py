@@ -57,6 +57,7 @@ def evaluate_global_model(
     partition_root: Path,
     batch_size: int = 64,
     device: Optional[torch.device] = None,
+    split: str = "test",
 ) -> Tuple[float, Dict[str, Any]]:
     """
     Load `ndarrays` into a fresh ResNet-18 and evaluate against the
@@ -77,7 +78,7 @@ def evaluate_global_model(
     model.eval()
 
     criterion = nn.BCEWithLogitsLoss()
-    loader = get_test_dataloader(data_root, partition_root, batch_size=batch_size)
+    loader = get_test_dataloader(data_root, partition_root, batch_size=batch_size, split=split)
 
     total_loss, total_examples = 0.0, 0
     all_targets, all_probs = [], []
@@ -133,6 +134,7 @@ def make_evaluate_fn(
     batch_size: int = 64,
     every_n_rounds: int = 1,
     num_rounds: Optional[int] = None,
+    split: str = "test",
 ):
     """
     Build the `evaluate_fn` EveFLStrategy expects.
@@ -158,6 +160,7 @@ def make_evaluate_fn(
             partition_root=partition_root,
             batch_size=batch_size,
             device=device,
+            split=split,
         )
 
     return evaluate_fn

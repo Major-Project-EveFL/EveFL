@@ -13,7 +13,8 @@ Run `partition_and_save()` ONCE before training. It writes:
         hospital_0/indices.npy
         hospital_1/indices.npy
         hospital_2/indices.npy
-        test/indices.npy           # held-out IID test split (disjoint patients)
+        test/indices.npy           # held-out IID test split (disjoint patients): final report ONLY
+        val/indices.npy            # held-out validation split (disjoint patients): model selection
         partition_meta.json
 
 Nothing quantum here — this is standard PyTorch data loading.
@@ -32,12 +33,13 @@ import torch
 from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 
-from evefl.fl.partition import audit_partition, split_by_patient
 from evefl.fl.model import CHESTXRAY_LABELS, NUM_CLASSES, get_eval_transform, get_train_transform
+from evefl.fl.partition import audit_partition, split_by_patient
 
 log = logging.getLogger(__name__)
 
 TEST_FRACTION = 0.10
+VAL_FRACTION = 0.10  # patients held out for model selection (the test set is for the final report only)
 N_HOSPITALS = 3
 DEFAULT_BATCH_SIZE = 32
 
@@ -164,6 +166,7 @@ def partition_and_save(
     test_fraction: float = TEST_FRACTION,
     seed: int = 42,
     subset_fraction: float = 1.0,
+    val_fraction: float = VAL_FRACTION,
 ) -> None:
     """
     Split ChestX-ray14 BY PATIENT into n_clients disjoint non-IID hospital
@@ -194,9 +197,12 @@ def partition_and_save(
     split = split_by_patient(
         patient_ids, labels,
         n_clients=n_clients, alpha=alpha, test_fraction=test_fraction,
-        seed=seed, subset_fraction=subset_fraction,
+        seed=seed, subset_fraction=subset_fraction, val_fraction=val_fraction,
     )
-    audit = audit_partition(patient_ids, labels, split.client_indices, split.test_indices)
+    audit = audit_partition(
+        patient_ids, labels, split.client_indices, split.test_indices,
+        split.val_indices if val_fraction > 0 else None,
+    )
     if not audit["ok"]:
         raise RuntimeError(f"Patient-level split is not disjoint: {audit['overlaps']}")
 
@@ -213,12 +219,22 @@ def partition_and_save(
     log.info("Test set: %d images, %d patients -> %s",
              len(split.test_indices), split.n_patients_test, test_dir)
 
+    if val_fraction > 0:
+        val_dir = partition_root / "val"
+        val_dir.mkdir(exist_ok=True)
+        np.save(val_dir / "indices.npy", split.val_indices)
+        log.info("Validation set: %d images, %d patients -> %s",
+                 len(split.val_indices), split.n_patients_val, val_dir)
+
     meta = {
         "scheme": "patient_level_dirichlet_rarest_label",
         "n_clients": n_clients,
         "alpha": alpha,
         "seed": seed,
         "test_fraction": test_fraction,
+        "val_fraction": val_fraction,
+        "n_patients_val": split.n_patients_val,
+        "n_val": int(len(split.val_indices)),
         "subset_fraction": subset_fraction,
         "n_patients_total": split.n_patients_total,
         "n_patients_used": split.n_patients_used,
@@ -245,7 +261,9 @@ def audit_saved_partition(data_root: str | Path, partition_root: str | Path) -> 
     client_dirs = sorted(partition_root.glob("hospital_*"), key=lambda p: int(p.name.split("_")[1]))
     client_indices = [np.load(d / "indices.npy") for d in client_dirs]
     test_indices = np.load(partition_root / "test" / "indices.npy")
-    return audit_partition(patient_ids, labels, client_indices, test_indices)
+    val_path = partition_root / "val" / "indices.npy"
+    val_indices = np.load(val_path) if val_path.exists() else None
+    return audit_partition(patient_ids, labels, client_indices, test_indices, val_indices)
 
 
 # ---------------------------------------------------------------------------
@@ -287,11 +305,15 @@ def get_test_dataloader(
     *,
     batch_size: int = 64,
     num_workers: int = 0,
+    split: str = "test",
 ) -> DataLoader:
-    idx_path = Path(partition_root) / "test" / "indices.npy"
+    """Held-out evaluation loader. `split` is "test" (final report only) or "val" (model selection)."""
+    if split not in ("test", "val"):
+        raise ValueError(f"split must be 'test' or 'val', got {split!r}")
+    idx_path = Path(partition_root) / split / "indices.npy"
     if not idx_path.exists():
         raise FileNotFoundError(
-            f"Test partition not found at {idx_path}. Run dataset.partition_and_save() first."
+            f"{split} partition not found at {idx_path}. Run dataset.partition_and_save() first."
         )
 
     indices = np.load(idx_path)

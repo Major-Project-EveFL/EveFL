@@ -15,7 +15,7 @@ Fix in order. Each fix needs a test.
   bound relative to the median.
 - P0-3 [FIXED: structured per-round macro/per-class AUC in results JSON via the sequential runner, LOCKDOWN rounds included, skipped classes listed; tests/test_evaluation.py] No evaluation. `evaluate_fn=None`, client `evaluate()` returns NaN. Add server-side
   macro AUC-ROC on the held-out test split (skip classes with no positives), plus per-class AUC.
-- P0-4 [FIXED in code: evefl/fl/partition.py, patient-level disjoint split, tests/test_partition.py. TODO: run scripts/audit_partition.py on the real data on Kaggle and update the paper text, see docs/paper_patches/partition_scheme.md] evefl/fl/dataset.py `_dirichlet_partition`. A multi-label image is added to every client
+- P0-4 [FIXED in code: evefl/fl/partition.py, patient-level disjoint train/val/test split, tests/test_partition.py, tests/test_validation_split.py. TODO: run scripts/audit_partition.py on the real data on Kaggle and update the paper text, see docs/paper_patches/partition_scheme.md] evefl/fl/dataset.py `_dirichlet_partition`. A multi-label image is added to every client
   that receives any of its positive classes, so partitions overlap. Splitting is per image, but
   ChestX-ray14 has multiple images per patient, so patients leak across train, test and clients.
   Also the code (class-wise Dirichlet) differs from the paper's description (per-sample p~Dir).

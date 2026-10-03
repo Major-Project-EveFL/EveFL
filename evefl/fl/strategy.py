@@ -94,6 +94,8 @@ class EveFLStrategy(Strategy):
         experiment_seed: int = 0,
         evaluate_fn: Optional[Callable[[int, List[np.ndarray], dict],
                                         Optional[Tuple[float, Dict[str, Scalar]]]]] = None,
+        val_evaluate_fn: Optional[Callable[[int, List[np.ndarray], dict],
+                                            Optional[Tuple[float, Dict[str, Scalar]]]]] = None,
     ):
         """
         intercept_probability: fixed Eve intercept-resend probability
@@ -139,6 +141,7 @@ class EveFLStrategy(Strategy):
         self._num_rounds = num_rounds
         self._caution_lr_multiplier = caution_lr_multiplier
         self._evaluate_fn = evaluate_fn
+        self._val_evaluate_fn = val_evaluate_fn  # validation split: for model selection, never the test split
 
         # Last known good parameters — what LOCKDOWN rounds fall back to.
         self._last_good_parameters = initial_parameters
@@ -367,6 +370,14 @@ class EveFLStrategy(Strategy):
             return None
         ndarrays = parameters_to_ndarrays(parameters)
         return self._evaluate_fn(server_round, ndarrays, {})
+
+    def evaluate_validation(
+        self, server_round: int, parameters: Parameters
+    ) -> Optional[Tuple[float, Dict[str, Scalar]]]:
+        """Evaluate the global model on the VALIDATION patients (used to choose rounds / hyperparameters)."""
+        if self._val_evaluate_fn is None:
+            return None
+        return self._val_evaluate_fn(server_round, parameters_to_ndarrays(parameters), {})
 
     # ------------------------------------------------------------------
     # Helpers

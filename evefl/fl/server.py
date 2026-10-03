@@ -131,6 +131,7 @@ def create_strategy(
     n_qubits: int,
     num_clients: int,
     evaluate_fn=None,
+    val_evaluate_fn=None,
     qkd_backend: str = DEFAULT_BACKEND,
     sample_fraction: float = 0.25,
     bit_flip_probability: float = 0.0,
@@ -149,6 +150,7 @@ def create_strategy(
         min_fit_clients=min(num_clients, DEFAULT_MIN_FIT_CLIENTS),
         min_available_clients=max(num_clients, DEFAULT_MIN_AVAILABLE_CLIENTS),
         evaluate_fn=evaluate_fn,
+        val_evaluate_fn=val_evaluate_fn,
         base_lr=base_lr,
         num_rounds=num_rounds,
         caution_lr_multiplier=caution_lr_multiplier,
@@ -221,6 +223,17 @@ def run_experiment(
         every_n_rounds=eval_every_n_rounds,
         num_rounds=num_rounds,
     )
+    # Validation split (if the partition has one): per-round `val_eval`, the ONLY thing to select rounds,
+    # learning rates or thresholds on. `server_eval` (test) is for the final report.
+    has_val = (Path(partition_root) / "val" / "indices.npy").exists()
+    val_evaluate_fn = make_evaluate_fn(
+        data_root=data_root,
+        partition_root=partition_root,
+        batch_size=max(batch_size, 64),
+        every_n_rounds=eval_every_n_rounds,
+        num_rounds=num_rounds,
+        split="val",
+    ) if has_val else None
 
     strategy = create_strategy(
         initial_parameters=initial_parameters,
@@ -229,6 +242,7 @@ def run_experiment(
         n_qubits=n_qubits,
         num_clients=num_clients,
         evaluate_fn=evaluate_fn,
+        val_evaluate_fn=val_evaluate_fn,
         qkd_backend=qkd_backend,
         sample_fraction=sample_fraction,
         bit_flip_probability=bit_flip_probability,

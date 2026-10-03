@@ -125,3 +125,48 @@ reported results is **n_qubits = 1024, sample_fraction = 0.25**, a DEVIATION fro
 The deviation was decided after seeing the sweep results; it is not a post-hoc rewrite of the rule. Both settings
 are reported in the paper. Everything generated at the headline (Table III, Theorem 1 numbers) is labelled with
 the setting and this note.
+
+## Pre-registered: hysteresis and policy-mode sweep (Phase 2)
+
+Committed BEFORE the sweep is run. It measures the control plane only (rounds and client-rounds, not accuracy): QBER
+trajectories are sampled with the exact count-level model of Phase 1 and fed to the REAL policy classes
+(`evefl/orchestration/policy.py`, via `evefl/fl/control_sim.py`). Excluding a hospital under non-IID data biases the model;
+that cost is measured by the Phase 5 training experiments and is not assumed to be zero.
+
+### Setting (fixed)
+3 links; controller block n_qubits = 1024 with sample fraction 0.25 (the headline); thresholds 0.05 / 0.11; 50 rounds per
+trajectory; 1000 trajectories per cell; seed 0; policy mode `per_client` with `min_clients = 2` for the hysteresis sweep.
+Note: the 4.6% / 25.6% false-CAUTION figures reported for the Phase 1 sweep at 2% / 3% noise are SYSTEM-level (max over 3
+links); per link they are 1.6% / 9.4%. Per-link figures are what flapping depends on in `per_client` mode.
+
+### Hysteresis grid
+dwell N in {1, 2, 3, 5, 8} x margin in {0, 0.005, 0.01, 0.02} x bit-flip noise e in {0, 0.01, 0.02, 0.03} on all links.
+Escalation is never delayed in any cell (entering CAUTION at 0.05 and LOCKDOWN at 0.11 is immediate); only the way out is slowed.
+
+### Scenarios and reported quantities (every cell, every noise level)
+- A, quiet (alpha = 0 on all links): false-CAUTION share of link-rounds, false-LOCKDOWN share, and state changes per link-round
+  (flapping).
+- B, borderline (Eve on link 0, alpha = 0.44 static, mean QBER 11%): flapping and LOCKDOWN share of link 0.
+- C, window attack (Eve on link 0, alpha = 0.6, rounds 21 to 30): detection latency (rounds from round 21 until link 0 is in
+  LOCKDOWN; must be identical for every cell, because escalation is immediate), recovery latency (rounds after round 30 until
+  link 0 is SECURE again), and client-rounds trained over the 50 rounds.
+
+### Selection rule for the recommended hysteresis setting (anchored at e = 2%)
+A (N, margin) is a CANDIDATE iff, at e = 2%:
+1. mean recovery latency in scenario C is at most 5 rounds (recovery takes N rounds, so this bounds N <= 5), and
+2. client-rounds trained in scenario C are at least 95% of those of (N = 1, margin = 0) at the same noise (the percentage is
+   fixed now, before the run).
+Recommended = the candidate with the fewest state changes per link-round in scenario A at e = 2%; ties go to the smaller N, then
+the smaller margin. If (N = 1, margin = 0) wins, hysteresis is not worth enabling at this operating point, and that is the result.
+The full grid is reported at all four noise levels and at the borderline alpha = 0.44. Hysteresis buys stability, not accuracy, and
+costs rounds spent in the higher state; it never softens or delays the 0.11 LOCKDOWN entry.
+
+### Policy-mode comparison (hysteresis off, e = 1%, 3 links, 50 rounds, 1000 trajectories)
+Modes `global_binary` (QKDFL-style, B2), `global` (B3) and `per_client` (B4, min_clients = 2) under Eve on ONE link:
+static alpha in {0.3, 0.44, 0.6, 1.0}; window alpha = 0.6 over rounds 21 to 30; intermittent alpha = 0.6 active in 30% of rounds
+(a different pattern per trajectory). Reported: share of rounds discarded, client-rounds trained as a share of the maximum
+(3 x 50), and per-client participation (selective exclusion is an attack lever, docs/03). Expected, to be confirmed or refuted by
+the run: for a static Eve with alpha >= 0.44 the global modes discard almost every round while `per_client` keeps the two clean
+hospitals training; below alpha ~0.3 the three modes barely differ.
+
+Outputs: `docs/validation/hysteresis_sweep.json` (all cells, config, seeds) and an ADR (docs/adr/0002).

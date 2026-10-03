@@ -64,7 +64,9 @@ from evefl.fl.evaluation import make_evaluate_fn
 from evefl.fl.model import build_resnet18, describe_initialisation
 from evefl.fl.runner import build_local_client_proxies, run_sequential_fl
 from evefl.fl.strategy import DEFAULT_CAUTION_LR_MULTIPLIER, EveFLStrategy
-from evefl.orchestration.state_machine import StateThresholds
+from evefl.fl.channels import ChannelPlan, build_plan
+from evefl.orchestration.policy import PolicyConfig, policy_registry
+from evefl.orchestration.state_machine import HysteresisConfig, StateThresholds
 from evefl.quantum.config import PRESETS, QKDConfig
 from evefl.quantum.factory import DEFAULT_BACKEND, available_backends
 
@@ -138,13 +140,15 @@ def create_strategy(
     base_lr: Optional[float] = None,
     num_rounds: Optional[int] = None,
     caution_lr_multiplier: float = DEFAULT_CAUTION_LR_MULTIPLIER,
+    channels: Optional[ChannelPlan] = None,
+    policy_config: Optional[PolicyConfig] = None,
 ) -> EveFLStrategy:
     return EveFLStrategy(
         initial_parameters=initial_parameters,
         intercept_probability=intercept_probability,
         intercept_probability_schedule=intercept_probability_schedule,
         n_qubits=n_qubits,
-        thresholds=StateThresholds(),
+        thresholds=None if policy_config is not None else StateThresholds(),
         fraction_fit=DEFAULT_FRACTION_FIT,
         min_fit_clients=min(num_clients, DEFAULT_MIN_FIT_CLIENTS),
         min_available_clients=max(num_clients, DEFAULT_MIN_AVAILABLE_CLIENTS),
@@ -156,6 +160,8 @@ def create_strategy(
         sample_fraction=sample_fraction,
         bit_flip_probability=bit_flip_probability,
         experiment_seed=experiment_seed,
+        channels=channels,
+        policy_config=policy_config,
     )
 
 
@@ -185,6 +191,11 @@ def run_experiment(
     sample_fraction: float = 0.25,
     bit_flip_probability: float = 0.0,
     allow_small_sample: bool = False,
+    policy_mode: str = "global",
+    min_clients: int = 2,
+    hysteresis_margin: float = 0.0,
+    hysteresis_dwell: int = 1,
+    channel_plan: Optional[ChannelPlan] = None,
     intercept_probability_schedule: Optional[Callable[[int], float]] = None,
     eval_every_n_rounds: int = 1,
     run_federated_evaluate: bool = True,
@@ -200,6 +211,19 @@ def run_experiment(
     """
     qkd_config = QKDConfig(qkd_backend, n_qubits, sample_fraction, bit_flip_probability)
     qkd_config.validate(allow_small_sample=allow_small_sample)  # refuse meaningless QKD settings up front
+
+    if channel_plan is not None and (intercept_probability != 0.0 or intercept_probability_schedule is not None):
+        raise ValueError("Use either per-link attacks (channel_plan) or the legacy intercept probability/schedule.")
+    policy_config = PolicyConfig(
+        mode=policy_mode, min_clients=min_clients,
+        hysteresis=HysteresisConfig(margin=hysteresis_margin, dwell=hysteresis_dwell),
+    )
+    policy_registry.get(policy_mode)  # fail early on an unknown mode
+    if channel_plan is not None:
+        # With a plan, the baseline noise is the plan's (default_noise); the strategy forbids both.
+        bit_flip_probability_for_strategy = 0.0
+    else:
+        bit_flip_probability_for_strategy = bit_flip_probability
 
     set_global_seed(seed)
     output_path = Path(output_path)
@@ -231,11 +255,13 @@ def run_experiment(
         evaluate_fn=evaluate_fn,
         qkd_backend=qkd_backend,
         sample_fraction=sample_fraction,
-        bit_flip_probability=bit_flip_probability,
+        bit_flip_probability=bit_flip_probability_for_strategy,
         experiment_seed=seed,
         base_lr=lr,
         num_rounds=num_rounds,
         caution_lr_multiplier=caution_lr_multiplier,
+        channels=channel_plan,
+        policy_config=policy_config,
     )
 
     start_time = time.perf_counter()
@@ -268,6 +294,10 @@ def run_experiment(
         n_failures=len(history.failures),
         init_weights=init_weights,
         qkd=qkd_config.to_dict(),
+        policy={"mode": policy_mode, "min_clients": min_clients, "hysteresis_margin": hysteresis_margin,
+                "hysteresis_dwell": hysteresis_dwell, "thresholds": {"secure_max": policy_config.thresholds.secure_max,
+                                                                  "caution_max": policy_config.thresholds.caution_max}},
+        channel_plan=channel_plan.to_dict() if channel_plan is not None else None,
         optimizer={
             "name": "adamw",
             "lr": lr,
@@ -304,10 +334,15 @@ def build_experiment_log(
     init_weights: Dict[str, Any],
     optimizer: Optional[Dict[str, Any]] = None,
     qkd: Optional[Dict[str, Any]] = None,
+    policy: Optional[Dict[str, Any]] = None,
+    channel_plan: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     state_counts: Dict[str, int] = {}
+    exclusion_counts: Dict[str, int] = {}  # reason -> number of (client, round) exclusions
     for r in round_logs:
         state_counts[r["state"]] = state_counts.get(r["state"], 0) + 1
+        for reason, cids in (r.get("exclusion_reasons") or {}).items():
+            exclusion_counts[reason] = exclusion_counts.get(reason, 0) + len(cids)
 
     config = {
         "name": experiment_name,
@@ -322,6 +357,8 @@ def build_experiment_log(
         "init_weights_sha256": init_weights["sha256"],
         "optimizer": optimizer,
         "qkd": qkd,
+        "policy": policy,
+        "channel_plan": channel_plan,
     }
     config_hash = hashlib.sha256(json.dumps(config, sort_keys=True).encode("utf-8")).hexdigest()[:16]
 
@@ -334,6 +371,9 @@ def build_experiment_log(
             "execution_engine": "sequential (Ray-free)",
             "n_failures": n_failures,
             "state_counts": state_counts,
+            "rounds_discarded": sum(1 for r in round_logs if r.get("round_discarded", r["state"] == "LOCKDOWN")),
+            "exclusion_counts": exclusion_counts,
+            "participation_actual": (round_logs[-1].get("participation_actual") if round_logs else None),
         },
         "rounds": round_logs,
     }
@@ -367,6 +407,20 @@ def _build_arg_parser() -> argparse.ArgumentParser:
                     help="Run even though the QBER sample is tiny (results are meaningless; demos only).")
     p.add_argument("--intercept-probability", type=float, default=0.0,
                     help="Fixed Eve intercept-resend probability. Ignored if --attack-schedule is set.")
+    p.add_argument("--policy-mode", type=str, default="global", choices=sorted(policy_registry.list_keys()),
+                    help="global_binary: QKDFL-style pause at 0.11 (baseline B2). global: three states on the worst "
+                         "link (B3). per_client: one controller per link, exclude LOCKDOWN links (B4).")
+    p.add_argument("--min-clients", type=int, default=2,
+                    help="per_client: discard the round if fewer clients remain after exclusions.")
+    p.add_argument("--hysteresis-margin", type=float, default=0.0,
+                    help="De-escalate only after QBER is this far below the boundary (escalation is never delayed).")
+    p.add_argument("--hysteresis-dwell", type=int, default=1,
+                    help="Consecutive qualifying readings needed to de-escalate (1 = no hysteresis).")
+    p.add_argument("--link-attack", action="append", default=[], metavar="CID:ALPHA[:KIND@ARG]",
+                    help="Eve on ONE link, repeatable: 0:0.6, 1:0.6:step@20, 2:0.6:window@21-30, "
+                         "0:0.6:intermittent@0.3. Replaces --intercept-probability/--attack-schedule.")
+    p.add_argument("--link-noise", action="append", default=[], metavar="CID:PROB",
+                    help="Bit-flip noise on ONE link, repeatable (the other links use --bit-flip-probability).")
     p.add_argument("--attack-schedule", type=str, default=None, choices=list(ATTACK_SCHEDULES.keys()),
                     help="Use a preset per-round schedule instead of a fixed intercept-probability.")
     p.add_argument("--pretrained", action=argparse.BooleanOptionalAction, default=True,
@@ -414,6 +468,10 @@ def main(argv=None) -> None:
         log.info("Using existing partition at %s", args.partition_root)
 
     schedule = ATTACK_SCHEDULES[args.attack_schedule] if args.attack_schedule else None
+    channel_plan = None
+    if args.link_attack or args.link_noise:
+        channel_plan = build_plan(
+            args.link_attack, args.link_noise, default_noise=args.bit_flip_probability, seed=args.seed)
 
     summary = run_experiment(
         data_root=args.data_root,
@@ -434,6 +492,11 @@ def main(argv=None) -> None:
         sample_fraction=args.sample_fraction,
         bit_flip_probability=args.bit_flip_probability,
         allow_small_sample=args.allow_small_sample,
+        policy_mode=args.policy_mode,
+        min_clients=args.min_clients,
+        hysteresis_margin=args.hysteresis_margin,
+        hysteresis_dwell=args.hysteresis_dwell,
+        channel_plan=channel_plan,
         lr=args.lr,
         caution_lr_multiplier=args.caution_lr_multiplier,
         weight_decay=args.weight_decay,

@@ -8,7 +8,10 @@ available locally). It prints:
   * per-hospital patient/image counts and "No Finding" share,
   * per-class positive counts per hospital (to eyeball the Dirichlet skew).
 
-Exit code is 1 if any overlap is found.
+  * whether the index files still match the SHA-256 values stored in partition_meta.json
+    (a partition written before the hashes existed prints "not recorded").
+
+Exit code is 1 if any overlap is found or a recorded hash does not match.
 
     python scripts/audit_partition.py --data-root /kaggle/input/data \
         --partition-root /kaggle/working/partitions
@@ -23,7 +26,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
-from evefl.fl.dataset import audit_saved_partition  # noqa: E402
+from evefl.fl.dataset import audit_saved_partition, verify_partition_hashes  # noqa: E402
 from evefl.fl.model import CHESTXRAY_LABELS  # noqa: E402
 
 
@@ -50,8 +53,16 @@ def main() -> int:
     for c, label in enumerate(CHESTXRAY_LABELS):
         print("  " + f"{label:<20}" + "".join(f"{audit['stats'][n]['positives_per_class'][c]:>12}" for n in names))
 
-    print("\nRESULT:", "OK - disjoint at patient and image level" if audit["ok"] else "FAIL - overlap found")
-    return 0 if audit["ok"] else 1
+    try:
+        mismatched = verify_partition_hashes(args.partition_root)
+        print("\nIndex-file hashes:", "OK - match partition_meta.json" if not mismatched else f"MISMATCH {mismatched}")
+    except KeyError:
+        mismatched = {}
+        print("\nIndex-file hashes: not recorded in this partition_meta.json")
+
+    ok = audit["ok"] and not mismatched
+    print("RESULT:", "OK - disjoint at patient and image level" if ok else "FAIL - overlap or hash mismatch")
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":

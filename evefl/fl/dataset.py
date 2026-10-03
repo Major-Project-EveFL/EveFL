@@ -22,6 +22,7 @@ Nothing quantum here — this is standard PyTorch data loading.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from pathlib import Path
@@ -243,6 +244,7 @@ def partition_and_save(
         "n_test": int(len(split.test_indices)),
         "hospital_sizes": [int(len(idx)) for idx in split.client_indices],
         "dominant_group_counts": {str(k): v for k, v in split.dominant_group_counts.items()},
+        "index_sha256": _index_hashes(partition_root),
         "audit": audit,
     }
     with open(partition_root / "partition_meta.json", "w") as f:
@@ -250,6 +252,41 @@ def partition_and_save(
 
     log.info("Partitioning complete (disjoint: %s). Metadata: %s/partition_meta.json",
              audit["ok"], partition_root)
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for block in iter(lambda: f.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _index_hashes(partition_root: Path) -> dict:
+    """SHA-256 (hex) of every `<split>/indices.npy` under partition_root, keyed by split name."""
+    return {
+        p.parent.name: _sha256_file(p)
+        for p in sorted(partition_root.glob("*/indices.npy"))
+    }
+
+
+def verify_partition_hashes(partition_root: str | Path) -> dict:
+    """
+    Compare the index files on disk with the SHA-256 values stored in partition_meta.json.
+
+    Returns {split_name: {"expected": ..., "actual": ...}} for every split whose file is missing,
+    changed or unexpected; an empty dict means the partition is byte-identical to what was saved.
+    Raises KeyError if the metadata predates the hashes (no `index_sha256`).
+    """
+    partition_root = Path(partition_root)
+    meta = json.loads((partition_root / "partition_meta.json").read_text())
+    expected = meta["index_sha256"]
+    actual = _index_hashes(partition_root)
+    return {
+        name: {"expected": expected.get(name), "actual": actual.get(name)}
+        for name in sorted(set(expected) | set(actual))
+        if expected.get(name) != actual.get(name)
+    }
 
 
 def audit_saved_partition(data_root: str | Path, partition_root: str | Path) -> dict:

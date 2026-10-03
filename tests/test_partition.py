@@ -260,3 +260,52 @@ def test_partition_and_save_requires_patient_id_column(tmp_path):
     frame.to_csv(tmp_path / "Data_Entry_2017.csv", index=False)
     with pytest.raises(KeyError, match="Patient ID"):
         partition_and_save(tmp_path, tmp_path / "partitions")
+
+
+# --------------------------------------------------------------------------
+# Determinism and index-file hashes (a rerun with the same seed must be provably identical)
+# --------------------------------------------------------------------------
+
+def _index_files(root):
+    return sorted(p.relative_to(root).as_posix() for p in root.glob("*/indices.npy"))
+
+
+def test_partition_and_save_is_deterministic_for_the_same_seed(tmp_path):
+    make_metadata_frame(400, seed=2).to_csv(tmp_path / "Data_Entry_2017.csv", index=False)
+    runs = []
+    for name in ("run_a", "run_b"):
+        out = tmp_path / name
+        partition_and_save(tmp_path, out, n_clients=3, alpha=0.5, test_fraction=0.1, seed=7)
+        runs.append(out)
+    files = _index_files(runs[0])
+    assert files == _index_files(runs[1]) and len(files) == 5  # 3 hospitals + test + val
+    for rel in files:
+        assert np.array_equal(np.load(runs[0] / rel), np.load(runs[1] / rel)), rel
+    meta_a = json.loads((runs[0] / "partition_meta.json").read_text())
+    meta_b = json.loads((runs[1] / "partition_meta.json").read_text())
+    assert meta_a["index_sha256"] == meta_b["index_sha256"]
+
+
+def test_different_seed_changes_the_split_and_the_hashes(tmp_path):
+    make_metadata_frame(400, seed=2).to_csv(tmp_path / "Data_Entry_2017.csv", index=False)
+    partition_and_save(tmp_path, tmp_path / "s7", n_clients=3, seed=7)
+    partition_and_save(tmp_path, tmp_path / "s8", n_clients=3, seed=8)
+    h7 = json.loads((tmp_path / "s7" / "partition_meta.json").read_text())["index_sha256"]
+    h8 = json.loads((tmp_path / "s8" / "partition_meta.json").read_text())["index_sha256"]
+    assert h7 != h8
+
+
+def test_meta_stores_sha256_of_every_index_file_and_verify_detects_tampering(tmp_path):
+    from evefl.fl.dataset import verify_partition_hashes
+
+    make_metadata_frame(400, seed=2).to_csv(tmp_path / "Data_Entry_2017.csv", index=False)
+    out = tmp_path / "partitions"
+    partition_and_save(tmp_path, out, n_clients=3, seed=7)
+    meta = json.loads((out / "partition_meta.json").read_text())
+    assert set(meta["index_sha256"]) == {"hospital_0", "hospital_1", "hospital_2", "test", "val"}
+    assert all(len(h) == 64 for h in meta["index_sha256"].values())
+    assert verify_partition_hashes(out) == {}  # nothing mismatched
+
+    idx = np.load(out / "test" / "indices.npy")
+    np.save(out / "test" / "indices.npy", idx[::-1].copy())  # same members, different order: still a different file
+    assert list(verify_partition_hashes(out)) == ["test"]

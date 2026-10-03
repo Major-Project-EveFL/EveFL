@@ -47,6 +47,10 @@ Status: `[ ]` open, `[~]` code done / paper text pending, `[x]` paper updated.
   assumptions, the block size a key needs (headline 1024 qubits gives none), HMAC authentication caveat, no-key rounds
   handled like LOCKDOWN with a separate reason. Not wired into the FL path yet.
 
+- [~] **Key block vs controller block (ADR 0001).** Replace the "1024 photons per round produce an AES key" claim; weak-Eve
+  result with its assumption; limitations (not-secret simulation keys, HMAC not Wegman-Carter); Cascade inefficiency. Details in
+  `post_processing.md`, decision in `docs/adr/0001-key-block-separate-from-controller-block.md`.
+
 ## Claims that are not measured yet
 - [ ] **Measured vs projected labels.** Every Section VIII number (AUC, MIA, overhead, Table IV)
   is projected. Label each "projected" or replace it with a measured value from a results file.

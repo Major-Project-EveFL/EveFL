@@ -13,7 +13,7 @@ Excluding a hospital under non-IID data has a model-quality cost that only the P
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Sequence
+from typing import Callable, Dict, List, Optional, Sequence
 
 import numpy as np
 from scipy import stats
@@ -90,8 +90,9 @@ def link_state_changes_per_round(runs: Sequence[PolicyRun], links: Sequence[str]
 
 
 def share_of_link_rounds(runs: Sequence[PolicyRun], links: Sequence[str], state: SecurityState,
-                         rounds: slice = slice(None)) -> float:
-    """Share of (link, round) pairs in `state`, over the selected rounds."""
+                         rounds: Optional[slice] = None) -> float:
+    """Share of (link, round) pairs in `state`, over the selected rounds (default: all)."""
+    rounds = rounds if rounds is not None else slice(None)
     hits = total = 0
     for run in runs:
         for s in run.link_states[rounds]:

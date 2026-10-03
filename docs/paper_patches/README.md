@@ -47,8 +47,8 @@ Status: `[ ]` open, `[~]` code done / paper text pending, `[x]` paper updated.
 - [ ] **Measured vs projected labels.** Every Section VIII number (AUC, MIA, overhead, Table IV)
   is projected. Label each "projected" or replace it with a measured value from a results file.
   "17.3x" CKKS inflation and the QKDFL comparison numbers must go or be re-measured.
-- [ ] **Table III / Theorem 1.** Regenerate from real runs; restate Theorem 1 for the actual QBER
-  sample size (see docs/04 P1-4).
+- [~] **Table III / Theorem 1.** Done in code and data: `theorem1_table3.md` (restated theorem with exact numbers,
+  regenerated simulated Table III as `docs/validation/table3.tex`). The paper text still has to be replaced.
 - [ ] **"Graduated beats binary".** Needs per-client-link or intermittent-Eve experiments (P1-5),
   otherwise remove the claim.
 - [ ] **Encryption claims.** AES-GCM, CKKS and Groth16 are not in the FL path yet; do not describe

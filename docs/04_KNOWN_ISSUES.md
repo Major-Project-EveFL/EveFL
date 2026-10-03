@@ -37,7 +37,7 @@ Fix in order. Each fix needs a test.
   error correction, no real privacy amplification and no authentication (see docs/03).
 - P1-3 [PARTLY FIXED: ChannelModel with bit-flip noise, expected QBER e+(1-2e)alpha/4 tested; false-alarm rates still to be measured by the sample-size sweep, docs/06] Simulator has no channel noise. Add a depolarizing or bit-flip baseline. Without it,
   false-alarm behaviour and SECURE-band statistics are meaningless.
-- P1-4 QBER estimated on a 25% sample (about 128 bits at n=1024). Statistical noise is large. At
+- P1-4 [FIXED in code/data: exact restatement and checks in evefl/quantum/theory.py, tests/test_theory.py, docs/paper_patches/theorem1_table3.md; paper text pending] QBER estimated on a 25% sample (about 128 bits at n=1024). Statistical noise is large. At
   alpha=0.10 (mean 2.5%), a single client exceeds 5% about 3.6% of the time, and about 10% for
   max over 3 clients (false CAUTION). Theorem 1 in the paper: its sigma (~0.031) matches a
   128-bit sample, but the text says |I|=512 and Eq. 28 gives sigma about 0.016 for 512. Restate
@@ -48,7 +48,7 @@ Fix in order. Each fix needs a test.
   EveFL also halts almost every round. The paper's "about 18 of 50 rounds skipped, AUC 0.773 at
   alpha=0.6" and "36% / 64% rounds discarded" are not derivable from the design. Redesign the
   experiment (per-client links, intermittent or step Eve) or remove the claim.
-- P1-6 Paper Table III (0.8% at alpha=0, 100 trials, std 0.5-1.0%) cannot come from this
+- P1-6 [FIXED: regenerated, simulated, docs/validation/table3_theorem1.json; alpha=0,e=0 is exactly 0; paper text pending] Paper Table III (0.8% at alpha=0, 100 trials, std 0.5-1.0%) cannot come from this
   noiseless simulator, and demo_validation uses 10 trials. Regenerate from real runs.
 - P1-7 Every Section VIII number (AUC, MIA, overhead, Table IV) is projected. "17.3x" CKKS
   inflation is called fabricated in tests/test_ckks.py. QKDFL comparison numbers are invented.

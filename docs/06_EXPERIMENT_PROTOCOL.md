@@ -113,3 +113,15 @@ in 907 of 924 cells) and with the full `bb84_numpy` protocol on four cells (p-va
   thresholds are the proper fix; verify the Zhang et al. citation).
 - Detection is essentially complete from alpha = 0.3 (n = 1024, e = 1%: 99.9%); at alpha = 0.2 it is 95.2% and at
   alpha = 0.1 only 40%, so weak intermittent interception is not reliably caught at these block sizes.
+
+### Deviation from the pre-registered rule (2026-10-03)
+The rule's output above (n_qubits = 512, sample_fraction = 0.5) is left untouched. The headline used for
+reported results is **n_qubits = 1024, sample_fraction = 0.25**, a DEVIATION from the rule, for these reasons:
+- Both settings have the same expected sample (128 bits), so detection and false-alarm rates are essentially
+  identical (false CAUTION 0.11% vs 0.13% at e = 1%; detection at alpha = 0.3 of 99.7% vs 99.7% at e = 0 and
+  99.9% vs 99.9% at e = 1%). The rule's "smallest n" tie-break only saves simulation time.
+- The choice therefore affects key yield only: 0.375 versus 0.25 leftover sifted bits per qubit.
+- A 1024-qubit block is closer to realistic block sizes than 512.
+The deviation was decided after seeing the sweep results; it is not a post-hoc rewrite of the rule. Both settings
+are reported in the paper. Everything generated at the headline (Table III, Theorem 1 numbers) is labelled with
+the setting and this note.

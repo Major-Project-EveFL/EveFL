@@ -16,7 +16,7 @@ repos:
   - repo: local
     hooks:
       - id: mypy
-        name: mypy (typed core)
+        name: mypy (evefl)
         entry: python -m mypy
         language: system
         pass_filenames: false

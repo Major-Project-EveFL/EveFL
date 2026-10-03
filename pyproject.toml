@@ -45,5 +45,4 @@ python_version = "3.12"
 ignore_missing_imports = true
 warn_unused_ignores = true
 check_untyped_defs = false
-files = ["evefl/orchestration", "evefl/quantum", "evefl/registry.py", "evefl/fl/screening.py",
-         "evefl/fl/schedule.py", "evefl/fl/partition.py"]
+files = ["evefl"]

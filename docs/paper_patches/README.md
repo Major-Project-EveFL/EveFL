@@ -43,6 +43,10 @@ Status: `[ ]` open, `[~]` code done / paper text pending, `[x]` paper updated.
   proper fix, verify the Zhang et al. citation). Notebooks that used 16 or 64 qubits (QBER sample
   of 2 to 8 bits) said nothing about the controller.
 
+- [~] **Key post-processing (Phase 1 step 3).** `post_processing.md`: pipeline, the verified finite-key bound with its
+  assumptions, the block size a key needs (headline 1024 qubits gives none), HMAC authentication caveat, no-key rounds
+  handled like LOCKDOWN with a separate reason. Not wired into the FL path yet.
+
 ## Claims that are not measured yet
 - [ ] **Measured vs projected labels.** Every Section VIII number (AUC, MIA, overhead, Table IV)
   is projected. Label each "projected" or replace it with a measured value from a results file.

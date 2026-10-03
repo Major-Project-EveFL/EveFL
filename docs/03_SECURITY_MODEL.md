@@ -35,6 +35,14 @@ Out of scope: DoS, brute force, endpoint compromise, side channels in the simula
    round, zeroize afterwards. Reject replayed rounds.
 8. LOCKDOWN: discard that exchange's key material entirely and run a new exchange next round.
 
+## Implemented pipeline and finite-key accounting (Phase 1, step 3)
+`evefl/quantum/postprocess.py` implements steps 1 to 5 above with the Tomamichel et al. 2012 finite-key bound
+(Supplementary Theorem 2, verified against the paper; assumptions in the module docstring and
+`docs/paper_patches/post_processing.md`). Authentication is HMAC-SHA256 in the simulator, not Wegman-Carter. Rounds in
+which any client gets no key are treated like LOCKDOWN by `evefl/orchestration/policy.py` with reason `no_key`.
+Findings: blocks of about 10^4 qubits or more are needed for any key at eps_sec = 1e-10; the 1024-qubit controller
+setting yields none. Steps 6 to 8 (HKDF binding, AEAD, zeroization in the FL path) are Phase 4.
+
 ## Simulation caveat
 The simulator is not QKD security. The key provider interface must accept keys from an ETSI GS QKD
 014 key-delivery API so a real system can replace it without touching FL code.

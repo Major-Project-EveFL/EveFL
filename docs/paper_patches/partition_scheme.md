@@ -26,10 +26,26 @@ which we verify programmatically (overlap counts are reported in the released pa
 metadata).
 ```
 
+## Audited counts to cite (measured on the real data)
+Source: `docs/validation/partition_audit_real.json` (counts only, no patient identifiers). Run on Kaggle with seed 42,
+alpha = 0.5, test and validation fractions 0.1, at commit 9873d10 of branch `fix/p0-4-patient-level-split`.
+
+- All ten pair overlaps (three hospitals, test, validation) are 0 patients and 0 images.
+- Totals match the dataset: 12,869 + 6,470 + 5,306 + 3,080 + 3,080 = 30,805 patients; 46,975 + 18,018 + 25,136 + 10,889 +
+  11,102 = 112,120 images. The hospitals hold 42%, 16% and 22% of the images; test 9.7%, validation 9.9%.
+- The skew is non-IID by design (Dirichlet alpha = 0.5), e.g. Cardiomegaly positives: 1,868 in hospital 0 against 94 in
+  hospital 1. Hospital 0 sees only 5 Hernia positives (hospital 1: 86, hospital 2: 73, test: 53, validation: 10). Say so in
+  the paper so the low count is not mistaken for a bug.
+- Validation Hernia (10 positives) is thin: model selection uses the macro AUC over non-thin classes, rule pre-registered in
+  `docs/06_EXPERIMENT_PROTOCOL.md` ("Model-selection rule and thin classes").
+- Limitation: the index files of that Kaggle run were not hashed (the hashes were added afterwards). Reproducibility is
+  therefore evidenced by identical counts on a rerun, and from then on by `index_sha256` in `partition_meta.json`
+  (`scripts/audit_partition.py` verifies it). Do not state "byte-identical" for the audited run until a rerun has been compared.
+
 ## Notes for the authors
 - Replace "per-sample p ~ Dir(alpha)" wherever it appears (system model / experimental setup).
-- Report the audited overlap counts (all zero) and per-hospital patient/image counts from
-  `partition_meta.json` after the Kaggle run (`scripts/audit_partition.py`).
+- Report the audited overlap counts (all zero) and per-hospital patient/image counts (see the section above; the Kaggle
+  audit is done).
 - The validation split is by patient too, disjoint from the hospitals and the test set. State that the test
   set was never used to choose anything. Results JSON: `val_eval` (selection) and `server_eval` (test, report).
 - Limitation to state: a multi-label patient is represented by one dominant label for the

@@ -12,10 +12,15 @@ crypto:
   derived_key_length_bytes: 32
 
 orchestration:
+  mode: global          # global_binary (QKDFL-style baseline) | global | per_client
+  min_clients: 2        # per_client: discard the round if fewer clients remain after exclusions
+  hysteresis:           # slows the way OUT of a state only; margin 0 / dwell 1 = off
+    margin: 0.0
+    dwell: 1
   thresholds:
     secure_max: 0.05     # QBER < 5%  -> SECURE
     caution_max: 0.11    # 5% <= QBER < 11% -> CAUTION
-                          # QBER >= 11% -> LOCKDOWN
+                          # QBER >= 11% -> LOCKDOWN (never configurable below 0.11)
 
 fl:
   local_epochs: 5

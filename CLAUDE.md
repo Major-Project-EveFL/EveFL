@@ -75,6 +75,8 @@ streamlit run dashboard/app.py
   live in `C:\Users\Parin\evefl-env\`; set `PIP_CACHE_DIR` and `TMP` there when installing. Use
   `.venv\Scripts\python.exe`. CPU-only torch 2.5.1. `circom`/`snarkjs` are not installed locally, so the `zk`
   tests auto-skip here (markers `ckks`, `zk`, `slow` in tests/conftest.py and pyproject); CI runs them.
+- Property tests use hypothesis: CI runs the derandomised profile (`HYPOTHESIS_PROFILE=ci`, fixed examples); locally the default
+  profile explores randomly. CI enforces 100% branch coverage on `orchestration/state_machine.py` and `policy.py` only.
 - Dev tools: `pip install -r requirements-dev.txt`; `ruff check .`; `mypy` (typed core listed in pyproject; the
   whole-package `mypy evefl` still has ~17 errors, mostly flwr typing, tracked as a separate PR).
 - No `gh` CLI. Workflow: one branch per task, push to the `parineeta` remote

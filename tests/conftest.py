@@ -18,6 +18,7 @@ Select or exclude explicitly with e.g. `pytest -m "not zk"`.
 from __future__ import annotations
 
 import importlib.util
+import os
 import shutil
 
 import numpy as np
@@ -27,6 +28,19 @@ from PIL import Image
 
 from evefl.fl.dataset import partition_and_save
 from evefl.fl.model import CHESTXRAY_LABELS
+
+# Hypothesis profiles. CI uses "ci": derandomised with a fixed number of examples, so a green run cannot turn red
+# by luck (the same examples every time). Locally the default "dev" profile explores randomly to find new bugs;
+# select with HYPOTHESIS_PROFILE=ci to reproduce what CI runs. Hypothesis is a dev dependency (requirements-dev.txt).
+try:
+    from hypothesis import HealthCheck, settings
+
+    settings.register_profile("ci", derandomize=True, max_examples=300, deadline=None, database=None,
+                              suppress_health_check=[HealthCheck.too_slow])
+    settings.register_profile("dev", max_examples=100, deadline=None)
+    settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "dev"))
+except ImportError:  # property tests skip themselves via pytest.importorskip
+    pass
 
 # Test modules that are tagged automatically (so the tests themselves stay untouched).
 _MODULE_MARKERS = {

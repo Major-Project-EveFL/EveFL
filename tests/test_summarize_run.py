@@ -12,6 +12,7 @@ def _load():
 
 def _report():
     metrics = {"macro_auc_roc": 0.6123, "per_class_auc": {}, "skipped_classes": ["Hernia"], "n_scored_classes": 13,
+               "thin_classes": ["Hernia"], "macro_auc_roc_excl_thin": 0.6555,
                "n_test_examples": 10}
     return {
         "experiment": {"name": "t", "config_hash": "abc", "seed": 0, "num_rounds": 2, "num_clients": 3,
@@ -65,3 +66,9 @@ def test_old_results_without_policy_fields_still_summarise():
     report["rounds"][0].pop("excluded_clients")
     text = "\n".join(_load().summarize(report))
     assert "policy          : n/a" in text and "config_hash abc" in text
+
+
+def test_summary_shows_selection_auc_and_thin_classes():
+    text = "\n".join(_load().summarize(_report()))
+    assert "val_AUC*" in text and "0.6555" in text
+    assert "thin classes in the validation AUC (last evaluated round): ['Hernia']" in text

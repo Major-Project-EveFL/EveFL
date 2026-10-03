@@ -25,6 +25,10 @@ from evefl.fl.model import CHESTXRAY_LABELS, build_resnet18, get_device
 
 log = logging.getLogger(__name__)
 
+# Pre-registered in docs/06 (before any tuning): a class with fewer than this many positives (or negatives) in the
+# evaluated split is "thin"; its AUC is too noisy to steer model selection. A convention, not a power calculation.
+MIN_POSITIVES_FOR_SELECTION = 20
+
 
 def _per_class_auc_roc(y_true: np.ndarray, y_score: np.ndarray) -> Tuple[Dict[str, float], List[str]]:
     """
@@ -49,6 +53,32 @@ def _per_class_auc_roc(y_true: np.ndarray, y_score: np.ndarray) -> Tuple[Dict[st
     return per_class, skipped
 
 
+def _support_summary(
+    y_true: np.ndarray, per_class_auc: Dict[str, float], min_positives: int = MIN_POSITIVES_FOR_SELECTION
+) -> Dict[str, Any]:
+    """
+    Per-class support and the thin-class flag.
+
+    A SCORED class is thin if it has fewer than `min_positives` positives or fewer than `min_positives`
+    negatives in `y_true`. Returns n_positives_per_class (all classes), thin_classes (names, label order),
+    and macro_auc_roc_excl_thin: the mean AUC over scored, non-thin classes (NaN if there are none). Thin
+    classes stay in `per_class_auc` and in the all-class `macro_auc_roc`; only the selection macro drops them.
+    """
+    n_rows = int(y_true.shape[0])
+    positives = {label: int(y_true[:, i].sum()) for i, label in enumerate(CHESTXRAY_LABELS)}
+    thin = [
+        label for label in CHESTXRAY_LABELS
+        if label in per_class_auc and min(positives[label], n_rows - positives[label]) < min_positives
+    ]
+    kept = [auc for label, auc in per_class_auc.items() if label not in thin]
+    return {
+        "n_positives_per_class": positives,
+        "thin_classes": thin,
+        "min_positives": min_positives,
+        "macro_auc_roc_excl_thin": float(np.mean(kept)) if kept else float("nan"),
+    }
+
+
 @torch.no_grad()
 def evaluate_global_model(
     ndarrays,
@@ -69,6 +99,10 @@ def evaluate_global_model(
         skipped_classes   pathologies with no positives (or no negatives)
                           in the test split, which are left out of the macro
         n_scored_classes, n_test_examples
+        n_positives_per_class, thin_classes, min_positives, macro_auc_roc_excl_thin
+                          support per class; scored classes with < min_positives positives (or
+                          negatives) are "thin" and left out of macro_auc_roc_excl_thin, which is the
+                          model-selection metric on the validation split (docs/06)
     Written verbatim into each round's `server_eval` entry of the results JSON.
     """
     device = device or get_device()
@@ -99,7 +133,9 @@ def evaluate_global_model(
     if total_examples == 0:
         log.warning("Global eval: test set was empty — check partition_root.")
         return float("nan"), {"macro_auc_roc": float("nan"), "per_class_auc": {}, "skipped_classes": list(CHESTXRAY_LABELS),
-                              "n_scored_classes": 0, "n_test_examples": 0}
+                              "n_scored_classes": 0, "n_test_examples": 0,
+                              "n_positives_per_class": {label: 0 for label in CHESTXRAY_LABELS}, "thin_classes": [],
+                              "min_positives": MIN_POSITIVES_FOR_SELECTION, "macro_auc_roc_excl_thin": float("nan")}
 
     mean_loss = total_loss / total_examples
     y_true = np.concatenate(all_targets, axis=0)
@@ -114,6 +150,7 @@ def evaluate_global_model(
         "skipped_classes": skipped,
         "n_scored_classes": len(per_class_auc),
         "n_test_examples": total_examples,
+        **_support_summary(y_true, per_class_auc),
     }
 
     log.info(
@@ -124,6 +161,9 @@ def evaluate_global_model(
     )
     if skipped:
         log.warning("Global eval | classes skipped (single-valued in test split): %s", ", ".join(skipped))
+    if metrics["thin_classes"]:
+        log.info("Global eval | thin classes (< %d positives or negatives; excluded from macro_auc_roc_excl_thin): %s",
+                 MIN_POSITIVES_FOR_SELECTION, ", ".join(metrics["thin_classes"]))
     return mean_loss, metrics
 
 

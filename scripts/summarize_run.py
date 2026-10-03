@@ -17,10 +17,10 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 
-def _auc(entry: Dict[str, Any] | None) -> str:
+def _auc(entry: Dict[str, Any] | None, key: str = "macro_auc_roc") -> str:
     if not entry:
         return "   n/a"
-    value = entry["metrics"].get("macro_auc_roc")
+    value = entry["metrics"].get(key)
     return "   n/a" if value is None or value != value else f"{value:6.4f}"
 
 
@@ -69,9 +69,10 @@ def summarize(report: Dict[str, Any]) -> List[str]:
         f"participation   : {exp.get('participation_actual')}",
         f"elapsed seconds : {exp.get('elapsed_seconds'):.0f}",
         "",
-        "round state     sysQBER  sample  lr        updated  excluded  val_AUC  test_AUC",
+        "round state     sysQBER  sample  lr        updated  excluded  val_AUC  val_AUC*  test_AUC",
     ]
     skipped = None
+    thin = None
     for r in report["rounds"]:
         sizes = [d.get("qber_sample_size") for d in (r.get("qkd_per_client") or {}).values()]
         sample = f"{min(sizes)}-{max(sizes)}" if sizes and None not in sizes else "n/a"
@@ -80,12 +81,17 @@ def summarize(report: Dict[str, Any]) -> List[str]:
             f"{r['round']:>5} {r['state']:<9} {r['system_qber']:7.4f}  {sample:>6}  "
             f"{('%.2e' % lr) if lr else 'n/a':<9} {str(r.get('model_updated')):<7} "
             f"{_excluded_cell(r):<8}  "
-            f"{_auc(r.get('val_eval'))}  {_auc(r.get('server_eval'))}"
+            f"{_auc(r.get('val_eval'))}  {_auc(r.get('val_eval'), 'macro_auc_roc_excl_thin')}   "
+            f"{_auc(r.get('server_eval'))}"
         )
         if r.get("server_eval"):
             skipped = r["server_eval"]["metrics"].get("skipped_classes")
+        if r.get("val_eval"):
+            thin = r["val_eval"]["metrics"].get("thin_classes")
     lines.append("")
     lines.append(f"classes skipped in the test AUC (last evaluated round): {skipped}")
+    lines.append(f"thin classes in the validation AUC (last evaluated round): {thin}  "
+                 "(val_AUC* = macro over non-thin classes: the model-selection metric, docs/06)")
     return lines
 
 

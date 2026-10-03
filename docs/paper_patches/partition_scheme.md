@@ -41,6 +41,9 @@ alpha = 0.5, test and validation fractions 0.1, at commit 9873d10 of branch `fix
 - Limitation: the index files of that Kaggle run were not hashed (the hashes were added afterwards). Reproducibility is
   therefore evidenced by identical counts on a rerun, and from then on by `index_sha256` in `partition_meta.json`
   (`scripts/audit_partition.py` verifies it). Do not state "byte-identical" for the audited run until a rerun has been compared.
+- Reproducibility holds for a fixed NumPy version only: the split uses numpy's `Generator`, whose streams are not guaranteed
+  identical across versions. `partition_meta.json` records `numpy_version` (the audited run did not), and every results JSON
+  records the library versions. Quote the NumPy version next to the seed in the paper.
 
 ## Notes for the authors
 - Replace "per-sample p ~ Dir(alpha)" wherever it appears (system model / experimental setup).

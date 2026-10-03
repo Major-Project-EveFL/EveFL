@@ -55,10 +55,20 @@ audit = json.load(open("docs/validation/partition_audit_real.json"))
 meta = json.load(open("/kaggle/working/partitions_full/partition_meta.json"))
 same = all(meta["audit"]["stats"][k] == audit["stats"][k] for k in audit["stats"])
 print("counts identical to docs/validation/partition_audit_real.json:", same)
+print("numpy", meta["numpy_version"])
 print(json.dumps(meta["index_sha256"], indent=2))
 ```
-Paste both lines of output. The hashes are the proof of reproducibility from now on; a rerun that prints other hashes for the
-same seed means the split is NOT deterministic and must be reported.
+Paste all of it. The hashes prove reproducibility, but only between runs with the SAME NumPy version: the split draws from
+numpy's `Generator` (`permutation`, `dirichlet`), whose streams NumPy does not guarantee to be identical across versions.
+So a hash (or even count) mismatch between Kaggle and the laptop (NumPy 1.26.4) is possible without any bug in our code.
+How to read the result:
+- same seed, same NumPy version, different hashes: the split is NOT deterministic, report it;
+- different NumPy version, different hashes: expected possibility, not a defect; it means the partition must be cited
+  together with `numpy_version` and the audited split cannot be recreated on a machine with another NumPy;
+- counts identical to the committed audit: the strongest evidence that this image reproduces the audited split (the audited
+  run did not record its NumPy version; going forward `partition_meta.json` does).
+Every results JSON now also records the interpreter and library versions (`experiment.environment`, shown by
+`summarize_run.py`), kept out of the config hash.
 
 ## Cell 4. Partition a small subset for the lite run
 ```python

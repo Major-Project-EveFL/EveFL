@@ -106,7 +106,7 @@ class ChestXray14Dataset(Dataset):
         df = load_metadata(self.data_root)
         label_matrix = parse_label_matrix(df["Finding Labels"])
 
-        self._image_names: np.ndarray = df["Image Index"].values
+        self._image_names: np.ndarray = df["Image Index"].to_numpy()
         self._labels: torch.Tensor = torch.from_numpy(label_matrix)
 
         if indices is not None:

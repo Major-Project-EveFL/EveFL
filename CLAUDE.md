@@ -77,6 +77,9 @@ streamlit run dashboard/app.py
   tests auto-skip here (markers `ckks`, `zk`, `slow` in tests/conftest.py and pyproject); CI runs them.
 - Property tests use hypothesis: CI runs the derandomised profile (`HYPOTHESIS_PROFILE=ci`, fixed examples); locally the default
   profile explores randomly. CI enforces 100% branch coverage on `orchestration/state_machine.py` and `policy.py` only.
+- Experiments: `--policy-mode global_binary|global|per_client` (B2/B3/B4), `--link-attack 0:0.6[:step@N|window@A-B|intermittent@P]`
+  (Eve on ONE link), `--link-noise`, `--hysteresis-margin/--hysteresis-dwell`, `--min-clients`; the full channel plan and policy are
+  written into the results JSON.
 - Dev tools: `pip install -r requirements-dev.txt`; `ruff check .`; `mypy` (typed core listed in pyproject; the
   whole-package `mypy evefl` still has ~17 errors, mostly flwr typing, tracked as a separate PR).
 - No `gh` CLI. Workflow: one branch per task, push to the `parineeta` remote

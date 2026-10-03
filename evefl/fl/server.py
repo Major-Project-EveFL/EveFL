@@ -58,13 +58,13 @@ import numpy as np
 import torch
 from flwr.common import ndarrays_to_parameters
 
+from evefl.fl.channels import ChannelPlan, build_plan
 from evefl.fl.client import DEFAULT_LR, DEFAULT_WEIGHT_DECAY, create_client_fn, get_model_parameters
 from evefl.fl.dataset import partition_and_save
 from evefl.fl.evaluation import make_evaluate_fn
 from evefl.fl.model import build_resnet18, describe_initialisation
 from evefl.fl.runner import build_local_client_proxies, run_sequential_fl
 from evefl.fl.strategy import DEFAULT_CAUTION_LR_MULTIPLIER, EveFLStrategy
-from evefl.fl.channels import ChannelPlan, build_plan
 from evefl.orchestration.policy import PolicyConfig, policy_registry
 from evefl.orchestration.state_machine import HysteresisConfig, StateThresholds
 from evefl.quantum.config import PRESETS, QKDConfig

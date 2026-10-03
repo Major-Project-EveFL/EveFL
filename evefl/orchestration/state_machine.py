@@ -29,6 +29,22 @@ class StateThresholds:
     caution_max: float = 0.11     # secure_max <= QBER < caution_max -> CAUTION
     # QBER >= caution_max -> LOCKDOWN
 
+    # The LOCKDOWN boundary is the asymptotic BB84 bound (Shor-Preskill 2000); it may be raised for
+    # experiments but never lowered. The CAUTION boundary is a configurable heuristic.
+    MIN_LOCKDOWN_THRESHOLD = 0.11
+
+    def __post_init__(self) -> None:
+        if not 0.0 < self.secure_max < self.caution_max <= 1.0:
+            raise ValueError(
+                f"Need 0 < secure_max < caution_max <= 1, got secure_max={self.secure_max}, "
+                f"caution_max={self.caution_max}."
+            )
+        if self.caution_max < self.MIN_LOCKDOWN_THRESHOLD:
+            raise ValueError(
+                f"caution_max (the LOCKDOWN threshold) may not be configured below "
+                f"{self.MIN_LOCKDOWN_THRESHOLD}, got {self.caution_max}."
+            )
+
 
 @dataclass
 class StateTransition:

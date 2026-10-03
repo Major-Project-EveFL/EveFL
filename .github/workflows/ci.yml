@@ -26,7 +26,7 @@ jobs:
           cache-dependency-path: requirements-dev.txt
 
       # Only the tools; mypy is configured to check the typed core, which has no heavy dependencies.
-      - run: pip install ruff==0.6.9 mypy==1.13.0 pandas-stubs types-PyYAML numpy
+      - run: pip install ruff==0.6.9 mypy==1.13.0 pandas-stubs==3.0.5.260914 types-PyYAML==6.0.12.20260906 numpy
 
       - run: ruff check .
 
@@ -48,15 +48,27 @@ jobs:
       - name: Install CPU-only torch first (the pinned CUDA wheels are ~2.5 GB)
         run: pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cpu
 
-      - name: Install project
+      - name: Install project (dev requirements: hypothesis, pytest-cov)
         run: |
-          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
           pip install -e .
 
       # --require-optional-tools turns "skipped because tool missing" into a failure, so a green
       # run means every selected test really ran. The ZK tests run in their own job below.
+      # HYPOTHESIS_PROFILE=ci: derandomised property tests with a fixed number of examples (tests/conftest.py).
       - name: Run tests
+        env:
+          HYPOTHESIS_PROFILE: ci
         run: python -m pytest -q -m "not zk and not slow" --require-optional-tools
+
+      # 100% branch coverage is enforced on the pure controller and policy modules only, not the whole repo.
+      - name: Controller and policy branch coverage (must be 100%)
+        env:
+          HYPOTHESIS_PROFILE: ci
+        run: >
+          python -m pytest -q tests/test_state_machine.py tests/test_hysteresis.py tests/test_policy.py
+          --cov=evefl.orchestration.state_machine --cov=evefl.orchestration.policy
+          --cov-branch --cov-report=term-missing --cov-fail-under=100
 
   zk-tests:
     name: Groth16 tests (circom 0.5 + snarkjs)

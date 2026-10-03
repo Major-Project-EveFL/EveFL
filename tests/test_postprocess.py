@@ -253,7 +253,12 @@ def test_two_runs_on_the_same_exchange_give_different_keys_because_hash_seeds_ar
 def test_headline_size_exchange_yields_no_key():
     result = BB84NumpyProtocol(sample_fraction=0.25, seed=1).run_exchange(1024, channel=ChannelModel(0.0, 0.01))
     out = postprocess(result, client_id="0", round_id=1, auth_key=AUTH_KEY)
-    assert out.status == pp.STATUS_NO_KEY and out.round_key is None and out.details["raw_length"] < 0
+    # Cascade's permutations are random, and on a 384-bit key its verification hash sometimes fails first, so
+    # either outcome is "no key". The bound itself must be negative for these sizes.
+    assert out.round_key is None and out.status in (pp.STATUS_NO_KEY, pp.STATUS_ABORT_EC)
+    k = len(result.sample_indices)
+    bound = finite_key_length(result.n_sifted - k, k, result.qber, leak_ec=0.0)
+    assert bound.key_length == 0 and bound.raw_length < 0
 
 
 def test_qber_at_or_above_the_lockdown_threshold_aborts_with_ge():

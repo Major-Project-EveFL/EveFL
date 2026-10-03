@@ -1,0 +1,19 @@
+# Extra packages for the Kaggle notebook image (Python 3.13, torch 2.11, torchvision 0.26). Install with:
+#
+#     pip install -q --no-deps -r requirements-kaggle.txt
+#
+# --no-deps is required. flwr==1.13.0 caps grpcio<=1.64.3 and protobuf<5, and grpcio 1.64.3 has no cp313
+# wheel, so a normal install would try to compile gRPC from source and replace the image's protobuf/numpy.
+# The image already provides torch, torchvision, numpy, scipy, pandas, scikit-learn, PyYAML, cryptography,
+# grpcio, protobuf, typer, rich and click; they are deliberately NOT pinned or replaced here.
+#
+# Checked locally, NOT on Kaggle: on the Python 3.12 dev machine, with flwr 1.13.0 installed --no-deps over numpy 2.5.3,
+# protobuf 7.36.2, grpcio 1.84.0, cryptography 50.0.2 and typer 0.27.2, the whole non-slow test suite passes (427 tests).
+# That shows flwr 1.13.0 tolerates newer grpcio/protobuf/numpy; it is no evidence for Python 3.13 or torch 2.11. The
+# first real check is cell 2 of docs/KAGGLE_RUNBOOK.md.
+# Not installed: qiskit and qiskit-aer. The default BB84 backend is the numpy one and imports neither; the Qiskit
+# reference backend and its cross-check need the pinned requirements.txt (qiskit-aer 0.15.1 has no cp313 wheel).
+flwr==1.13.0
+iterators==0.0.2
+pycryptodome==3.23.0
+tomli==2.4.1

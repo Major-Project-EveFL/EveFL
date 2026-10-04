@@ -79,11 +79,27 @@ aggregate and only the aggregate. `m_ij` is expanded from a pairwise seed by a c
   that masks cancel exactly. A coarser 32-bit grid would erase the very small late-training updates. Cost: 8 bytes per
   parameter on the wire instead of 4. The quantisation error against plaintext FedAvg is an acceptance criterion and is
   measured. Three rules go with it:
-  1. **Weights are applied client-side, before masking.** Client i sends the masked fixed-point form of
-     `(n_i / sum_{j in S} n_j) * delta_i`; the server only sums. The server announces S and the example counts `n_j` before
-     the round. Consequence to document: the weight is self-declared. A Byzantine client that inflates its `n_i` inflates its
-     own share of the average, and the server cannot see this inside the masked update. (Plaintext FedAvg has the same
-     weakness; here it cannot be screened.) The announced `n_j` can be capped from the registry as a mitigation.
+  1. **Weights are applied client-side, before masking, and come from the enrollment registry, not from the clients.** At
+     enrollment each hospital's registry entry holds its identity public key and its aggregation weight `w_i` (its
+     training-example count at enrollment, recorded out of band with the key and under the same trust assumption). In every
+     round client i sends the masked fixed-point form of `(w_i / sum_{j in S} w_j) * delta_i`; the server only sums, and it
+     **ignores any example count a client reports** (in secure mode that field is not read). Self-declared counts cannot be
+     trusted: a Byzantine client that inflated its count would inflate its share of the average, and the server could not see
+     it inside the masked update. Registry weights are public, fixed for the whole experiment, and renormalised over S each
+     round, so excluding a client renormalises exactly as plaintext FedAvg does. A hospital whose dataset changes needs a new
+     enrollment (a new registry version), never a per-round claim.
+     *Effect on the comparison with plaintext FedAvg.* Plaintext FedAvg today weights by the `num_examples` each client
+     reports every round (`len(train_loader.dataset)`; `EveFLStrategy.aggregate_fit`), renormalised over the included clients.
+     In this simulation a hospital's training set never changes, so with an honest enrollment (`w_i` equal to that count)
+     the weights of the two modes are numerically identical and secure aggregation must reproduce plaintext FedAvg within the
+     quantisation tolerance (acceptance test 11). The comparison stops being like for like in three cases, which are reported,
+     not hidden: (a) if a registry weight differs from the real count (stale or wrong enrollment), the secure result differs
+     from plaintext-with-reported-counts by exactly that reweighting, not by any cryptographic effect; (b) a dishonest count
+     moves plaintext FedAvg and cannot move secure aggregation, so under a count-inflation attack the two modes differ by
+     design; (c) the CAUTION per-update 0.5 down-weight exists only in plaintext (see the screening rule). The paper's baselines
+     therefore include three arms: plaintext with reported counts (the current code), plaintext with registry weights, and
+     secure with registry weights. The second isolates the effect of the weighting rule; the third differs from the second
+     only by masking and quantisation, so that is the pair a "secure aggregation costs X accuracy" statement must compare.
   2. **Out-of-range values wrap silently, so range is asserted, not assumed.** In two's-complement arithmetic modulo 2^64 with
      32 fractional bits the representable sum is `[-2^31, 2^31)`; a value outside it wraps to a plausible-looking wrong
      number. Each client therefore asserts, before masking, that every element is finite and that
@@ -129,7 +145,7 @@ held clip-to-bound branch are impossible per client. While secure aggregation is
    client can skip it, and the server cannot verify it until a norm proof is bound to the submitted update (the ZK redesign, last
    item of Phase 4).
 3. Client-side effects still work: FedProx mu in CAUTION, the lower learning rate the server sends, and the FedAvg weights
-   (clients scale their update by `n_i / sum n` before masking; the example counts `n_i` are public by design).
+   (clients scale their update by `w_i / sum w` before masking, with `w_i` from the enrollment registry, rule 1 above).
 4. An **aggregate-level check**, accepted as the **only server-side defence** in secure mode: the norm of the aggregated
    delta is compared with the median of previously accepted aggregate norms; above `k_agg` times that median the round is
    discarded (reason `aggregate_norm`), without attributing it to a client. `k_agg` and the warm-up rule are pre-registered in
@@ -143,7 +159,8 @@ held clip-to-bound branch are impossible per client. While secure aggregation is
    - which client misbehaved: the check cannot attribute, so it cannot exclude, and it can only throw the round away. A single
      Byzantine client can therefore force repeated discards (a denial-of-service lever), and a legitimate large non-IID update
      can trigger a false discard;
-   - an inflated self-declared weight `n_i` (rule 1 above), unless it makes the aggregate norm jump.
+   - a wrong enrolled weight `w_i` (a registry error): clients cannot inflate their weight per round, but nothing in secure
+     mode detects a mistake made at enrollment.
    In short: in secure mode the guarantee against Byzantine clients (adversary 3) is "gross blow-ups of the aggregate are
    discarded", and nothing more.
 5. A plaintext (not server-blind) mode with full screening stays available and is the default, so the existing results stay
@@ -159,6 +176,7 @@ decryptor party** that sees only the aggregate; a server colluding with that par
 |---|---|---|
 | Link key `K(i, round, direction)` | client i and the server | other clients |
 | Pairwise seed `seed_ij` and mask `m_ij` | clients i and j | the server (if the relayed keys are authenticated) |
+| Aggregation weight `w_i` (not secret) | the enrollment registry; everyone reads it | clients: none may set or change it per round |
 | Ephemeral X25519 private key | the client, dropped after deriving the seeds | anyone else |
 | Ed25519 identity private key | the client | the server |
 | CKKS secret key (optional) | the decryptor party | the aggregating server |
@@ -172,7 +190,8 @@ decryptor party** that sees only the aggregate; a server colluding with that par
 - May not claim: Theorem 3 in secure mode; post-quantum or hybrid security; protection against a malicious server that lies about S (it can make masks
   fail to cancel; a signed consistency round is out of scope); protection against membership or inversion attacks on the
   aggregate; Byzantine robustness under secure aggregation; that simulated keys are secret.
-- The server still sees metadata: who participates, `n_i`, per-client QBER and key status, round timing.
+- The server still sees metadata: who participates, the public registry weights `w_i`, per-client QBER and key status, round
+  timing.
 
 ## Acceptance tests (written before the code, so they cannot be fitted to it)
 1. The server-side aggregator only accepts a `MaskedUpdate` type; a test shows the plaintext update never reaches it.
@@ -190,8 +209,10 @@ decryptor party** that sees only the aggregate; a server colluding with that par
 10. Range assertion: an element just inside `2^31 / |S|` is accepted; one just outside, a NaN and an infinity are refused before
     masking; a deliberately wrapped aggregate is detected and aborts the round. A test also shows that without the assertion the
     wrap is silent (so the assertion is not redundant).
-11. Client-side weighting: the masked sum equals the plaintext weighted average within the quantisation tolerance, and the server
-    object never receives an unweighted update.
+11. Client-side weighting from the registry: the masked sum equals the plaintext weighted average computed with the same
+    registry weights within the quantisation tolerance; the server object never receives an unweighted update; a client that
+    reports a different example count changes nothing in the secure result (and does change plaintext FedAvg, shown as the
+    contrast); excluding a client renormalises the weights over S exactly as plaintext FedAvg does.
 12. Dropout: removing any one participant, or corrupting one message, aborts the round with `secagg_dropout`, forms no partial
     aggregate and leaves the model unchanged.
 13. A server that substitutes an ephemeral public key is detected (signature check against the out-of-band registry) and the
@@ -202,8 +223,8 @@ decryptor party** that sees only the aggregate; a server colluding with that par
 2. The aggregate-norm check is the only server-side defence in secure mode; its limits are stated above.
 3. Theorem 3 is removed from, or heavily qualified in, the secure-mode claims (see "Paper impact").
 4. The identity-key registry is a test fixture; identity public keys reach clients out of band and never through the server.
-5. 64-bit fixed point with 32 fractional bits, with the three rules above (client-side weights, range assertion, any dropout
-   aborts the round).
+5. 64-bit fixed point with 32 fractional bits, with the three rules above (client-side weights **fixed at enrollment from the
+   registry**, range assertion, any dropout aborts the round). Self-declared example counts are not trusted in secure mode.
 6. After this ADR is reviewed and merged, implementation starts with the `KeyManager` (step 1 of the order below).
 
 ## Paper impact: Theorems 3 and 4

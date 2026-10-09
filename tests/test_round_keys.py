@@ -108,3 +108,12 @@ def test_key_exchange_is_reproducible_in_its_raw_exchange_but_keys_stay_random()
     a, b = generate_round_key(**kwargs), generate_round_key(**kwargs)
     assert a.details["n_sifted"] == b.details["n_sifted"] and a.details["qber"] == b.details["qber"]
     assert bytes(a.round_key.key) != bytes(b.round_key.key)  # privacy-amplification seeds come from secrets
+
+
+def test_round_key_carries_the_sha256_of_the_authenticated_transcript_as_the_hkdf_salt():
+    kwargs = dict(experiment_seed=SEED, server_round=5, channel=ChannelModel(0.0, 0.01), auth_key=AUTH_KEY, ec_seed=1)
+    a = generate_round_key(client_id="0", **kwargs)
+    b = generate_round_key(client_id="1", **kwargs)
+    assert a.ok and b.ok
+    assert len(a.round_key.transcript_sha256) == 32 and len(b.round_key.transcript_sha256) == 32
+    assert a.round_key.transcript_sha256 != b.round_key.transcript_sha256  # the transcript binds client and round

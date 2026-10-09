@@ -285,6 +285,8 @@ class RoundKey:
     provenance: str = "bb84-sim"
     simulated: bool = True
     zeroized: bool = False
+    # SHA-256 of the authenticated classical transcript: public, used as the HKDF salt (docs/adr/0003). b"" = unknown.
+    transcript_sha256: bytes = b""
 
     def zeroize(self) -> None:
         for i in range(len(self.key)):
@@ -395,6 +397,6 @@ def postprocess(
     round_key = RoundKey(
         client_id=client_id, round_id=round_id, key=bytearray(np.packbits(secret_a).tobytes()),
         key_bits=out_bits, qber=observed, qber_upper=bound.qber_upper, leaked_bits=leak_ec + hash_bits,
-        eps_sec=eps_sec, eps_cor=eps_cor,
+        eps_sec=eps_sec, eps_cor=eps_cor, transcript_sha256=hashlib.sha256(transcript).digest(),
     )
     return PostprocessResult(STATUS_OK, "ok", round_key, details)

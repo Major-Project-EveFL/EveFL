@@ -30,7 +30,7 @@ Fix in order. Each fix needs a test.
   once. The dataset also re-reads the CSV and rebuilds labels on every client instantiation.
 
 ## P1 (scientific validity)
-- P1-1 The BB84 key never protects the FL traffic. AES-GCM is not called anywhere in the FL path.
+- P1-1 [PARTLY ADDRESSED, STILL OPEN: the link-key layer exists as a library (evefl/crypto/linkkeys.py, keymanager.py, tests/test_link_keys.py, tests/test_key_manager.py; ADR 0003 step 1) but is NOT wired into the FL path and the keys are simulated, seed-determined and not secret] The BB84 key never protects the FL traffic. AES-GCM is not called anywhere in the FL path.
   README ("encrypted gradients") and dashboard footer ("only AES-256-GCM is active") are wrong
   until wired. Wire it or fix the claims.
 - P1-2 [FIXED in code: evefl/quantum/postprocess.py (sample discarded, Cascade with counted leakage, verification hash, Toeplitz privacy amplification with the finite-key bound, HMAC authentication), tests/test_postprocess.py, docs/paper_patches/post_processing.md. NOT wired into the FL path yet (Phase 4). Headline 1024-qubit blocks yield no key.] BB84 post-processing. `sifted_key` includes publicly compared sample bits, and there is no

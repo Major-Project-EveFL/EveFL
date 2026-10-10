@@ -73,7 +73,8 @@ def test_evaluate_global_model_returns_json_ready_structured_metrics(synthetic_d
                                           partition_root=partition_root, batch_size=4)
     assert loss == loss  # not NaN
     assert set(metrics) == {"macro_auc_roc", "per_class_auc", "skipped_classes", "n_scored_classes", "n_test_examples",
-                            "n_positives_per_class", "thin_classes", "min_positives", "macro_auc_roc_excl_thin"}
+                            "n_positives_per_class", "thin_classes", "min_positives", "macro_auc_roc_excl_thin",
+                            "timing"}
     assert metrics["min_positives"] == MIN_POSITIVES_FOR_SELECTION
     assert set(metrics["n_positives_per_class"]) == set(CHESTXRAY_LABELS)
     assert metrics["n_test_examples"] > 0

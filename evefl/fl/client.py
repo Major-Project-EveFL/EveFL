@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Callable, Dict, List, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -34,6 +34,7 @@ from flwr.common import Scalar
 from evefl.fl.dataset import get_hospital_dataloader
 from evefl.fl.model import build_resnet18, get_criterion, get_device
 from evefl.orchestration.state_machine import SecurityState
+from evefl.profiling import LoaderMeter, begin_phase, end_phase, timed_iter
 
 log = logging.getLogger(__name__)
 
@@ -104,8 +105,10 @@ def _train_one_client(
         global_params = [p.detach().clone() for p in model.parameters()]
 
     total_loss, n_batches = 0.0, 0
+    meter = LoaderMeter()
+    started = begin_phase()
     for _epoch in range(epochs):
-        for images, targets in dataloader:
+        for images, targets in timed_iter(dataloader, meter):
             images, targets = images.to(device), targets.to(device)
             optimizer.zero_grad()
             logits = model(images)
@@ -118,17 +121,26 @@ def _train_one_client(
             n_batches += 1
 
     mean_loss = total_loss / n_batches if n_batches > 0 else float("nan")
-    return {"train_loss": mean_loss, "n_batches": n_batches}
+    phase = end_phase(meter, started)
+    return {
+        "train_loss": mean_loss, "n_batches": n_batches,
+        # Where the time went (docs/06, profiling): loader wait vs everything else, and how many images were read.
+        "data_wait_s": phase["data_wait_s"], "compute_s": phase["compute_s"], "phase_s": phase["phase_s"],
+        "n_images": float(phase["n_images"]),
+    }
 
 
 @torch.no_grad()
-def _evaluate_one_client(model: nn.Module, dataloader, *, device: torch.device) -> Tuple[float, int]:
+def _evaluate_one_client(
+    model: nn.Module, dataloader, *, device: torch.device, meter: Optional[LoaderMeter] = None
+) -> Tuple[float, int]:
     model.to(device)
     model.eval()
     criterion = get_criterion()
+    meter = meter if meter is not None else LoaderMeter()
 
     total_loss, total_examples = 0.0, 0
-    for images, targets in dataloader:
+    for images, targets in timed_iter(dataloader, meter):
         images, targets = images.to(device), targets.to(device)
         logits = model(images)
         loss = criterion(logits, targets)
@@ -230,8 +242,14 @@ class EveFLClient(NumPyClient):
         # server-side evaluate_fn against the shared test set — see
         # evaluation.py — since this is a non-IID, small local sample.
         loader = self._get_train_loader()
-        loss, n_examples = _evaluate_one_client(self.model, loader, device=self.device)
-        return loss, n_examples, {}
+        meter = LoaderMeter()
+        started = begin_phase()
+        loss, n_examples = _evaluate_one_client(self.model, loader, device=self.device, meter=meter)
+        phase = end_phase(meter, started)
+        return loss, n_examples, {
+            "data_wait_s": phase["data_wait_s"], "compute_s": phase["compute_s"], "phase_s": phase["phase_s"],
+            "n_images": float(phase["n_images"]),
+        }
 
 
 def create_client_fn(

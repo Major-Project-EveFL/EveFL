@@ -50,3 +50,7 @@ results/
 # coverage
 .coverage
 htmlcov/
+
+# Local-only reference material: never committed. (Both folders were purged from the history on 2026-10-10.)
+handoff/
+docs/reference/

@@ -46,6 +46,51 @@ def _environment_line(env: Dict[str, Any] | None) -> str:
     return f"python {env.get('python')} {env.get('system')}/{env.get('machine')}  {libs}"
 
 
+def _evaluation_line(evaluation: Dict[str, Any] | None) -> str:
+    if not evaluation:
+        return "n/a"
+    return (f"federated={evaluation.get('federated_evaluate')} test_every={evaluation.get('test_eval_every')} "
+            f"val_every={evaluation.get('val_eval_every')}")
+
+
+def _device_line(profile: Dict[str, Any] | None) -> str:
+    device = (profile or {}).get("device")
+    if not device:
+        return "n/a"
+    if device.get("cuda_available"):
+        devices = device.get("devices") or []
+        names = sorted({d.get("name") for d in devices})
+        mem = devices[0].get("total_memory_mib") if devices else None
+        return f"cuda: {device.get('device_count')} x {', '.join(str(n) for n in names)} ({mem} MiB), cpu_count={device.get('cpu_count')}"
+    return f"cpu only (cpu_count={device.get('cpu_count')})"
+
+
+def _profile_line(profile: Dict[str, Any] | None) -> str:
+    if not profile or not profile.get("summary"):
+        return "n/a"
+    summary = profile["summary"]
+    share = summary.get("data_wait_share_loaded")
+    rule = summary.get("rule_50_percent") or {}
+    parts = []
+    if share is not None:
+        parts.append(f"data wait {share * 100:.0f}% of the loaded phases (exceeds {rule.get('threshold', 0.5) * 100:.0f}%: "
+                     f"{rule.get('data_wait_exceeds_threshold')})")
+    rates = summary.get("images_per_s") or {}
+    if rates:
+        parts.append("images/s " + ", ".join(f"{k} {v:.1f}" for k, v in rates.items()))
+    gpu = profile.get("gpu") or {}
+    if gpu.get("available") and gpu.get("samples"):
+        per_gpu: Dict[str, list] = {}
+        for _t, gpus in gpu["samples"]:
+            for g in gpus:
+                per_gpu.setdefault(str(g["index"]), []).append(g["util_pct"])
+        parts.append("gpu util mean (all samples) " + ", ".join(
+            f"GPU{k} {sum(v) / len(v):.0f}%" for k, v in sorted(per_gpu.items())))
+    else:
+        parts.append("no gpu samples")
+    return " | ".join(parts)
+
+
 def _exclusion_line(counts: Dict[str, int] | None) -> str:
     if counts is None:
         return "n/a"
@@ -67,6 +112,9 @@ def summarize(report: Dict[str, Any]) -> List[str]:
         f"local_epochs={exp['local_epochs']}  batch={exp['batch_size']}",
         f"pretrained      : {exp.get('pretrained')}  weights={exp.get('init_weights', {}).get('source')}",
         f"environment     : {_environment_line(exp.get('environment'))}",
+        f"device          : {_device_line(exp.get('profile'))}",
+        f"evaluation      : {_evaluation_line(exp.get('evaluation'))}",
+        f"profile         : {_profile_line(exp.get('profile'))}",
         f"qkd             : {exp.get('qkd')}",
         f"optimizer       : {exp.get('optimizer')}",
         f"policy          : {_policy_line(exp.get('policy'))}",

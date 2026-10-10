@@ -83,3 +83,41 @@ def test_summary_shows_the_recorded_environment_and_omits_missing_packages():
     assert "environment     : python 3.13.15 Linux/x86_64" in text
     assert "torch 2.11.0+cu128" in text and "numpy 2.5.3" in text and "flwr 1.13.0" in text
     assert "qiskit" not in text
+
+
+def _profiled_report():
+    report = _report()
+    report["experiment"]["evaluation"] = {"federated_evaluate": False, "test_eval_every": 5, "val_eval_every": 1}
+    report["experiment"]["profile"] = {
+        "device": {"cuda_available": True, "default_device": "cuda", "device_count": 2, "cpu_count": 4,
+                   "devices": [{"index": 0, "name": "Tesla T4", "total_memory_mib": 15360},
+                               {"index": 1, "name": "Tesla T4", "total_memory_mib": 15360}]},
+        "dataloader": {"num_workers": 0, "batch_size": 32, "pin_memory": True},
+        "gpu": {"available": True, "n_samples": 2, "samples": [
+            [1.0, [{"index": 0, "util_pct": 10.0, "mem_mib": 100.0}, {"index": 1, "util_pct": 0.0, "mem_mib": 0.0}]],
+            [3.0, [{"index": 0, "util_pct": 30.0, "mem_mib": 100.0}, {"index": 1, "util_pct": 0.0, "mem_mib": 0.0}]]]},
+        "summary": {"data_wait_share_loaded": 0.71, "phase_seconds": {"fit": 99.0, "server_eval_test": 15.0},
+                    "images_per_s": {"fit": 43.2, "server_eval_test": 44.7},
+                    "rule_50_percent": {"threshold": 0.5, "data_wait_share": 0.71, "data_wait_exceeds_threshold": True}},
+    }
+    return report
+
+
+def test_summary_shows_device_evaluation_settings_and_the_data_wait_share():
+    text = "\n".join(_load().summarize(_profiled_report()))
+    assert "evaluation      : federated=False test_every=5 val_every=1" in text
+    assert "device          : cuda: 2 x Tesla T4 (15360 MiB), cpu_count=4" in text
+    assert "data wait 71% of the loaded phases" in text and "exceeds 50%: True" in text
+    assert "fit 43.2" in text and "server_eval_test 44.7" in text
+    assert "gpu util mean (all samples) GPU0 20%, GPU1 0%" in text
+
+
+def test_summary_of_a_cpu_run_and_of_an_old_result_without_profile():
+    report = _profiled_report()
+    report["experiment"]["profile"]["device"] = {"cuda_available": False, "default_device": "cpu", "device_count": 0,
+                                                 "cpu_count": 4, "devices": []}
+    report["experiment"]["profile"]["gpu"] = {"available": False, "n_samples": 0, "samples": []}
+    text = "\n".join(_load().summarize(report))
+    assert "device          : cpu only (cpu_count=4)" in text and "no gpu samples" in text
+    old = "\n".join(_load().summarize(_report()))
+    assert "device          : n/a" in old and "profile         : n/a" in old and "evaluation      : n/a" in old

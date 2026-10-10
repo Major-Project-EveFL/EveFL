@@ -28,7 +28,8 @@ metadata).
 
 ## Audited counts to cite (measured on the real data)
 Source: `docs/validation/partition_audit_real.json` (counts only, no patient identifiers). Run on Kaggle with seed 42,
-alpha = 0.5, test and validation fractions 0.1, at commit 9873d10 of branch `fix/p0-4-patient-level-split`.
+alpha = 0.5, test and validation fractions 0.1, at commit 31c996c of branch `fix/p0-4-patient-level-split` (9873d10 before the history rewrite of 2026-10-10 that removed two
+unrelated folders; the content is identical).
 
 - All ten pair overlaps (three hospitals, test, validation) are 0 patients and 0 images.
 - Totals match the dataset: 12,869 + 6,470 + 5,306 + 3,080 + 3,080 = 30,805 patients; 46,975 + 18,018 + 25,136 + 10,889 +

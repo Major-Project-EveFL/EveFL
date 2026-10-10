@@ -5,7 +5,7 @@
     "kaggle_dataset_path": "/kaggle/input/datasets/nih-chest-xrays/data",
     "dataset_rows": 112120,
     "dataset_patients": 30805,
-    "code_commit_audited": "9873d10 (branch fix/p0-4-patient-level-split, before main was merged into it)",
+    "code_commit_audited": "31c996c (branch fix/p0-4-patient-level-split, before main was merged into it); this was 9873d10 before the history rewrite of 2026-10-10, content identical",
     "kaggle_runtime": "Python 3.13.15, torch 2.11.0+cu128, torchvision 0.26.0+cu128 (code imported via sys.path; requirements.txt did not install there)",
     "parameters": {
       "n_clients": 3,
@@ -17,7 +17,7 @@
     },
     "recorded_in_repo_on": "2026-10-03",
     "audit_run_date": "not recorded; the run preceded the handoff of 2026-10",
-    "source": "transcript pasted by the team into the session; verbatim copy in handoff/kaggle_audit_output.txt",
+    "source": "transcript pasted by the team into the session; the verbatim copy is kept outside the repository",
     "contains_patient_ids": false,
     "index_sha256": null,
     "index_sha256_note": "partition_meta.json of this run predates the index-file hashes, so the saved index files were not hashed. To prove reproducibility, rerun partition_and_save with these parameters on current main and compare every number below; the new run also records index_sha256."

@@ -24,8 +24,13 @@ class CipherSuite(ABC):
     """Base class every cipher suite implementation must satisfy."""
 
     @abstractmethod
-    def derive_key(self, key_material: bytes, *, info: bytes = b"", length: int = 32) -> bytes:
-        """Derive a symmetric key from raw key material (e.g. a QKD sifted key)."""
+    def derive_key(
+        self, key_material: bytes, *, info: bytes = b"", length: int = 32, salt: bytes | None = None
+    ) -> bytes:
+        """Derive a symmetric key from raw key material (e.g. a QKD sifted key).
+
+        `info` must bind the context (label, direction, round id, client id; see evefl.crypto.linkkeys.link_info).
+        `salt` is public (for example the SHA-256 of the authenticated classical transcript); None means no salt."""
         raise NotImplementedError
 
     @abstractmethod

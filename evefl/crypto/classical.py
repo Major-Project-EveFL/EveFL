@@ -28,11 +28,13 @@ class ClassicalCipherSuite(CipherSuite):
     def name(self) -> str:
         return "classical-sha256-hkdf-aesgcm"
 
-    def derive_key(self, key_material: bytes, *, info: bytes = b"evefl-round-key", length: int = 32) -> bytes:
+    def derive_key(
+        self, key_material: bytes, *, info: bytes = b"evefl-round-key", length: int = 32, salt: bytes | None = None
+    ) -> bytes:
         hkdf = HKDF(
             algorithm=hashes.SHA256(),
             length=length,
-            salt=None,  # no salt: key_material (QKD-derived) is already high-entropy
+            salt=salt,  # public; None = no salt (key_material from QKD is already high-entropy)
             info=info,
         )
         return hkdf.derive(key_material)

@@ -10,6 +10,10 @@ quantum:
 crypto:
   active_suite: classical   # switch to "pq_kyber" once stretch goal is implemented
   derived_key_length_bytes: 32
+  key_provider: simulated_qkd   # seed-determined simulator keys, NOT secret; a real QKD system (ETSI GS QKD 014) plugs in here
+  key_block:                    # docs/adr/0001: a separate, larger exchange than the controller's QBER block
+    n_qubits: 131072            # 2^17
+    sample_fraction: 0.1
 
 orchestration:
   mode: global          # global_binary (QKDFL-style baseline) | global | per_client

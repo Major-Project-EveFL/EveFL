@@ -251,3 +251,19 @@ patches (a short patch with the claims above, including Theorems 3 and 4).
 3. Wire both into `EveFLStrategy` and the runner behind config; screening-unavailable logging; `k_agg` pre-registration first.
 4. Overhead measurement (test 9) and a results file.
 5. Optional CKKS adapter; ZK norm-proof redesign last.
+
+## Implementation status
+- **Step 1 (KeyManager, key combiner, bound HKDF, AEAD, single use, zeroization): implemented on branch `feat/key-manager`,
+  not yet reviewed or merged.** Code: `evefl/crypto/linkkeys.py` (injective `info` and associated-data encodings, labelled
+  length-prefixed key combiner that a KEM secret could join later, HKDF salted with the transcript hash that
+  `RoundKey.transcript_sha256` now carries, AES-256-GCM with the bound associated data, one seal and one open per key,
+  best-effort overwrite of our own `bytearray` buffers) and `evefl/crypto/keymanager.py` (`KeyProvider` ABC with registry and
+  a `simulated_qkd` provider selected from `settings.yaml`, `KeyManager`, `KeyHandle.release()`, `ProtectedSender` and
+  `ProtectedReceiver`). `CipherSuite.derive_key` gained an optional `salt`.
+- Tests: `tests/test_link_keys.py` and `tests/test_key_manager.py` cover acceptance tests 4, 5 and 6 and test 7 at the level
+  of the sender object (a spy transport receives nothing when there is no key). Eleven deliberate breakages of the security
+  properties (dropping the client or round from `info`, a field from the associated data, the salt, the header check, the
+  single-use checks, the wipe, the no-key guard) were each caught by at least one test.
+- **Not done, and not claimed:** nothing is wired into the FL path yet, so P1-1 stays open; the keys are simulated,
+  seed-determined and not secret; no secure aggregation exists; the "nothing in the clear" property is shown for the sender
+  object, not yet for the whole round. Steps 2 to 5 are not started.

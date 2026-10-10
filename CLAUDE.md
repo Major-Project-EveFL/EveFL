@@ -97,7 +97,7 @@ streamlit run dashboard/app.py
 evefl/quantum (base: QKDProtocol + ChannelModel + shared registry | bb84_numpy: fast exact default | bb84:
 Qiskit reference | seeding: independent streams from experiment seed/round/client | config: refuses QBER
 samples under ~100 bits | factory | validation, sweep, theory: exact detection probabilities) |
-evefl/crypto (base, classical, homomorphic, ckks, zkproof, groth16, circuits/norm_bound.circom) |
+evefl/crypto (base, classical, linkkeys: bound HKDF + AEAD + zeroization, keymanager: KeyManager + providers, homomorphic, ckks, zkproof, groth16, circuits/norm_bound.circom) |
 evefl/orchestration/state_machine.py (pure logic; LOCKDOWN threshold guarded >= 0.11) |
 evefl/fl (model, dataset, partition: patient-level train/val/test split, client, strategy, screening, schedule,
 runner, evaluation, server) | evefl/config/settings.yaml | evefl/registry.py | dashboard/ (Streamlit, 4 pages) |

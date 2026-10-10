@@ -47,3 +47,14 @@ def test_decrypt_fails_with_wrong_key():
 
     with pytest.raises(InvalidTag):
         suite.decrypt(payload, wrong_key)
+
+
+def test_derive_key_salt_changes_the_key_and_the_default_is_unsalted():
+    suite = ClassicalCipherSuite()
+    material = b"fixed-test-material-not-random"
+    unsalted = suite.derive_key(material, info=b"i")
+    assert suite.derive_key(material, info=b"i", salt=None) == unsalted
+    salted_a = suite.derive_key(material, info=b"i", salt=b"A" * 32)
+    salted_b = suite.derive_key(material, info=b"i", salt=b"B" * 32)
+    assert len({unsalted, salted_a, salted_b}) == 3
+    assert suite.derive_key(material, info=b"i", salt=b"A" * 32) == salted_a

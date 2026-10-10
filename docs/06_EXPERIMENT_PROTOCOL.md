@@ -197,3 +197,19 @@ split has only 10 Hernia positives, so its per-class AUC is very noisy and would
 
 Implementation: `evefl/fl/evaluation.py` (`MIN_POSITIVES_FOR_SELECTION = 20`, `_support_summary`), shown by
 `scripts/summarize_run.py` as the `val_AUC*` column.
+
+## Pre-registered: is image loading the bottleneck? (profiling, before any cache is built)
+Written 2026-10-10, before the profile of any run exists. A preprocessing cache (one-time resized uint8 arrays) is built only
+if both parts hold on a run on a GPU:
+1. **Run part.** In the lite alpha = 0 run, the time the consumer spent blocked on the DataLoader is at least 50% of the wall
+   time of the loaded phases (client fit, test evaluation, validation evaluation and, if enabled, federated evaluation):
+   `experiment.profile.summary.data_wait_share_loaded >= 0.5`.
+2. **Micro-benchmark part.** In `scripts/profile_loading.py`, the single-process image rate is below half of the training
+   compute rate on synthetic tensors (`criterion.decode_below_half_of_compute`).
+3. **Device condition.** `experiment.profile.device.cuda_available` is true and the nvidia-smi samples show a GPU present. On a
+   CPU-only run the rule is not applied (the data wait is then not the diagnosis; the compute is).
+If only one part holds, the result is reported and the cache is not built; the next step is then decided and recorded here.
+The threshold 0.5 is fixed now and not tuned on the profile.
+
+Settings recorded with every run: `experiment.evaluation` (`federated_evaluate`, `test_eval_every`, `val_eval_every`). Validation
+alone drives selection; the test split is evaluated every `test_eval_every` rounds and on the final round, and the paper says so.

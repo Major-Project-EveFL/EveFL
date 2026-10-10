@@ -164,6 +164,28 @@ model-selection metric (macro over classes with at least 20 positives, rule in `
 subset several classes may be thin or skipped, which is expected here. Also paste any line mentioning skipped classes or a
 failure count above 0.
 
+## Cell 7. Micro-benchmark: is image loading the bottleneck? (no FL, a few minutes)
+Run this BEFORE cell 5 if you want the numbers to be read together, and paste the whole printed output. It samples 300 images
+and times each stage of the current pipeline in one process, DataLoader throughput at 0, 2 and 4 workers, and the model's
+compute ceiling on synthetic tensors. It also writes `/kaggle/working/profile_loading.json`.
+```python
+%cd /kaggle/working/EveFL
+DATA = "/kaggle/input/datasets/nih-chest-xrays/data"
+!nvidia-smi
+!python scripts/profile_loading.py --data-root {DATA} --n-images 300 --workers 0,2,4 \
+    --output /kaggle/working/profile_loading.json
+```
+The DataLoader measurements run before anything touches CUDA, on purpose (the fork-after-CUDA deadlock in CLAUDE.md).
+Do not change `--workers` to values above the CPU count that `nvidia-smi` and the output report.
+
+## What changed in cells 5 and 6 (profiling)
+- Federated evaluate is now OFF by default (it was a second full pass over each client's training data and fed nothing).
+  Add `--federated-evaluate` to cell 5 only if you want that pass measured; the value is recorded in the results JSON.
+- `--test-eval-every N` runs the TEST split every N rounds plus the final round; validation runs every round and alone drives
+  selection. Default 1 (every round), as before.
+- The results JSON now has `experiment.profile` (device, nvidia-smi samples, time per phase, loader wait) and
+  `experiment.evaluation`. `summarize_run.py` prints a `device`, `evaluation` and `profile` line; paste them.
+
 ## What I will check when you paste
 - cell 1 printed a commit line, `flwr 1.13.0` and the import line, with no traceback and no token anywhere in the output,
 - cell 2 printed `OK`,

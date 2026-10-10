@@ -83,7 +83,9 @@ streamlit run dashboard/app.py
   profile explores randomly. CI enforces 100% branch coverage on `orchestration/state_machine.py` and `policy.py` only.
 - Experiments: `--policy-mode global_binary|global|per_client` (B2/B3/B4), `--link-attack 0:0.6[:step@N|window@A-B|intermittent@P]`
   (Eve on ONE link), `--link-noise`, `--hysteresis-margin/--hysteresis-dwell`, `--min-clients`; the full channel plan and policy are
-  written into the results JSON.
+  written into the results JSON. `--federated-evaluate` (off by default) and `--test-eval-every N` (test every N rounds + the
+  last; validation every round and alone drives selection) are recorded under `experiment.evaluation`; `experiment.profile`
+  holds device, nvidia-smi samples and time per phase (loader wait vs compute); `scripts/profile_loading.py` is the micro-benchmark.
 - Dev tools: `pip install -r requirements-dev.txt`; `ruff check .`; `mypy` (the whole `evefl` package; it passes,
   and CI runs it in the lint job and again in the tests job with flwr and torch installed).
 - No `gh` CLI. Workflow: one branch per task, push to the `parineeta` remote

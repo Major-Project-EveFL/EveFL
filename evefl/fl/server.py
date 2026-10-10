@@ -61,13 +61,14 @@ from flwr.common import ndarrays_to_parameters
 from evefl import environment as _environment
 from evefl.fl.channels import ChannelPlan, build_plan
 from evefl.fl.client import DEFAULT_LR, DEFAULT_WEIGHT_DECAY, create_client_fn, get_model_parameters
-from evefl.fl.dataset import partition_and_save
+from evefl.fl.dataset import DEFAULT_NUM_WORKERS, partition_and_save
 from evefl.fl.evaluation import make_evaluate_fn
 from evefl.fl.model import build_resnet18, describe_initialisation
 from evefl.fl.runner import build_local_client_proxies, run_sequential_fl
 from evefl.fl.strategy import DEFAULT_CAUTION_LR_MULTIPLIER, EveFLStrategy
 from evefl.orchestration.policy import PolicyConfig, policy_registry
 from evefl.orchestration.state_machine import HysteresisConfig, StateThresholds
+from evefl.profiling import GpuSampler, device_info, summarize_gpu, summarize_rounds
 from evefl.quantum.config import PRESETS, QKDConfig
 from evefl.quantum.factory import DEFAULT_BACKEND, available_backends
 
@@ -172,6 +173,34 @@ def create_strategy(
 # Experiment runner
 # ============================================================================
 
+def build_eval_fns(
+    *,
+    data_root: Path,
+    partition_root: Path,
+    batch_size: int,
+    num_rounds: int,
+    test_eval_every: int = 1,
+    val_eval_every: int = 1,
+):
+    """
+    The two server-side evaluation callbacks.
+
+    Validation (`val`, the ONLY split that may drive selection of a round, a rate or a threshold) runs every
+    `val_eval_every` rounds, default every round. The TEST split is for the final report and runs every `test_eval_every`
+    rounds plus the final round. Returns `(test_fn, val_fn_or_None)`; there is no validation function if the partition has
+    no `val` split.
+    """
+    eval_batch = max(batch_size, 64)
+    test_fn = make_evaluate_fn(
+        data_root=data_root, partition_root=partition_root, batch_size=eval_batch,
+        every_n_rounds=test_eval_every, num_rounds=num_rounds, split="test")
+    has_val = (Path(partition_root) / "val" / "indices.npy").exists()
+    val_fn = make_evaluate_fn(
+        data_root=data_root, partition_root=partition_root, batch_size=eval_batch,
+        every_n_rounds=val_eval_every, num_rounds=num_rounds, split="val") if has_val else None
+    return test_fn, val_fn
+
+
 def run_experiment(
     *,
     data_root: Path,
@@ -200,8 +229,9 @@ def run_experiment(
     hysteresis_dwell: int = 1,
     channel_plan: Optional[ChannelPlan] = None,
     intercept_probability_schedule: Optional[Callable[[int], float]] = None,
-    eval_every_n_rounds: int = 1,
-    run_federated_evaluate: bool = True,
+    test_eval_every: int = 1,
+    val_eval_every: int = 1,
+    run_federated_evaluate: bool = False,
 ) -> Dict[str, Any]:
     """
     Run one complete EveFL federated-learning experiment on the
@@ -241,24 +271,12 @@ def run_experiment(
     )
     client_proxies = build_local_client_proxies(client_fn, num_clients=num_clients)
 
-    evaluate_fn = make_evaluate_fn(
-        data_root=data_root,
-        partition_root=partition_root,
-        batch_size=max(batch_size, 64),
-        every_n_rounds=eval_every_n_rounds,
-        num_rounds=num_rounds,
+    # Validation (if the partition has one): per-round `val_eval`, the ONLY thing to select rounds, learning rates or
+    # thresholds on. `server_eval` (test) is for the final report and runs every `test_eval_every` rounds + the last.
+    evaluate_fn, val_evaluate_fn = build_eval_fns(
+        data_root=data_root, partition_root=partition_root, batch_size=batch_size, num_rounds=num_rounds,
+        test_eval_every=test_eval_every, val_eval_every=val_eval_every,
     )
-    # Validation split (if the partition has one): per-round `val_eval`, the ONLY thing to select rounds,
-    # learning rates or thresholds on. `server_eval` (test) is for the final report.
-    has_val = (Path(partition_root) / "val" / "indices.npy").exists()
-    val_evaluate_fn = make_evaluate_fn(
-        data_root=data_root,
-        partition_root=partition_root,
-        batch_size=max(batch_size, 64),
-        every_n_rounds=eval_every_n_rounds,
-        num_rounds=num_rounds,
-        split="val",
-    ) if has_val else None
 
     strategy = create_strategy(
         initial_parameters=initial_parameters,
@@ -283,15 +301,22 @@ def run_experiment(
     log.info("Starting sequential (Ray-free) EveFL run: %d round(s), %d client(s)...",
               num_rounds, num_clients)
 
-    final_parameters, history = run_sequential_fl(
-        client_proxies=client_proxies,
-        strategy=strategy,
-        num_rounds=num_rounds,
-        initial_parameters=initial_parameters,
-        run_federated_evaluate=run_federated_evaluate,
-    )
+    sampler = GpuSampler(interval_s=2.0)
+    sampler.start(clock_start=start_time)
+    try:
+        final_parameters, history = run_sequential_fl(
+            client_proxies=client_proxies,
+            strategy=strategy,
+            num_rounds=num_rounds,
+            initial_parameters=initial_parameters,
+            run_federated_evaluate=run_federated_evaluate,
+            clock_start=start_time,
+        )
+    finally:
+        sampler.stop()
 
     elapsed_seconds = time.perf_counter() - start_time
+    profile_block = _build_profile_block(strategy.round_logs, sampler, batch_size=batch_size)
     log.info("EveFL run finished in %.2f seconds (%d failure(s)).",
               elapsed_seconds, len(history.failures))
 
@@ -320,6 +345,14 @@ def run_experiment(
             "caution_lr_multiplier": caution_lr_multiplier,
             "weight_decay": weight_decay,
         },
+        profile=profile_block,
+        evaluation={
+            "federated_evaluate": run_federated_evaluate,
+            "test_eval_every": test_eval_every,
+            "val_eval_every": val_eval_every,
+            "final_round_always_evaluated": True,
+            "selection_uses": "validation split only",
+        },
     )
 
     with open(output_path, "w") as f:
@@ -330,6 +363,26 @@ def run_experiment(
         "output": str(output_path),
         "n_failures": len(history.failures),
         "final_state": strategy.round_logs[-1]["state"] if strategy.round_logs else None,
+    }
+
+
+def _build_profile_block(round_logs: list, sampler: GpuSampler, *, batch_size: int) -> Dict[str, Any]:
+    """Device, GPU samples (raw and per round and phase) and the whole-run timing summary, for `experiment.profile`."""
+    windows: Dict[str, Any] = {}
+    for log_entry in round_logs:
+        timing = log_entry.get("timing") or {}
+        for name, phase in (timing.get("phases") or {}).items():
+            if "t_start" in phase and "t_end" in phase:
+                windows[f"round{log_entry['round']}:{name}"] = (phase["t_start"], phase["t_end"])
+    return {
+        "device": device_info(),
+        "dataloader": {"num_workers": DEFAULT_NUM_WORKERS, "batch_size": batch_size,
+                       "pin_memory": bool(device_info().get("cuda_available"))},
+        "instrumentation": {"gpu_sampler": "nvidia-smi every 2 s", "synchronize": "torch.cuda.synchronize once per phase",
+                            "clock": "time.perf_counter, seconds since the start of the run"},
+        "gpu": sampler.to_dict(),
+        "gpu_by_phase": summarize_gpu(sampler.samples, windows) if sampler.available else {},
+        "summary": summarize_rounds(round_logs),
     }
 
 
@@ -351,6 +404,8 @@ def build_experiment_log(
     qkd: Optional[Dict[str, Any]] = None,
     policy: Optional[Dict[str, Any]] = None,
     channel_plan: Optional[Dict[str, Any]] = None,
+    profile: Optional[Dict[str, Any]] = None,
+    evaluation: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     state_counts: Dict[str, int] = {}
     exclusion_counts: Dict[str, int] = {}  # reason -> number of (client, round) exclusions
@@ -377,9 +432,16 @@ def build_experiment_log(
     }
     config_hash = hashlib.sha256(json.dumps(config, sort_keys=True).encode("utf-8")).hexdigest()[:16]
 
+    provenance: Dict[str, Any] = {}
+    if profile is not None:
+        provenance["profile"] = profile        # hardware and timing: measurements, never part of the config hash
+    if evaluation is not None:
+        provenance["evaluation"] = evaluation  # which evaluations ran how often; they do not change what is trained
+
     return {
         "experiment": {
             **config,
+            **provenance,
             "config_hash": config_hash,
             # Provenance only (library versions): deliberately NOT part of `config`, so the hash is machine-independent.
             "environment": _environment.runtime_environment(),
@@ -454,15 +516,22 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--experiment-name", type=str, default="evefl_experiment")
     p.add_argument("--output", type=Path, default=Path("results/fl_training_log.json"))
-    p.add_argument("--eval-every-n-rounds", type=int, default=1)
+    p.add_argument("--test-eval-every", "--eval-every-n-rounds", dest="test_eval_every", type=int, default=1,
+                    help="Evaluate the TEST split every N rounds and always on the final round (default 1: every round). "
+                         "Validation is evaluated every round and alone drives selection. "
+                         "--eval-every-n-rounds is a deprecated alias that now applies to the test split only.")
     p.add_argument("--subset-fraction", type=float, default=1.0,
                     help="If the partitions at --partition-root don't exist yet, "
                          "(re-)partition using only this fraction of the dataset "
                          "(e.g. 0.05 for a quick demo run).")
     p.add_argument("--partition-alpha", type=float, default=0.5,
                     help="Dirichlet alpha for non-IID partitioning; lower = more skewed.")
+    p.add_argument("--federated-evaluate", action="store_true",
+                    help="ALSO run each client's evaluate() every round. Off by default: it is a second full pass over "
+                         "each client's training data (with training augmentation) and feeds neither selection nor the "
+                         "controller. The value is recorded in the results JSON.")
     p.add_argument("--no-federated-evaluate", action="store_true",
-                    help="Skip per-client evaluate() calls (server-side evaluate_fn still runs).")
+                    help="Deprecated no-op: federated evaluation is already off by default.")
     return p
 
 
@@ -517,8 +586,8 @@ def main(argv=None) -> None:
         lr=args.lr,
         caution_lr_multiplier=args.caution_lr_multiplier,
         weight_decay=args.weight_decay,
-        eval_every_n_rounds=args.eval_every_n_rounds,
-        run_federated_evaluate=not args.no_federated_evaluate,
+        test_eval_every=args.test_eval_every,
+        run_federated_evaluate=args.federated_evaluate,
     )
 
     log.info("Done: %s", summary)

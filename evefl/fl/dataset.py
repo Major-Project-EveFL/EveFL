@@ -43,6 +43,7 @@ TEST_FRACTION = 0.10
 VAL_FRACTION = 0.10  # patients held out for model selection (the test set is for the final report only)
 N_HOSPITALS = 3
 DEFAULT_BATCH_SIZE = 32
+DEFAULT_NUM_WORKERS = 0  # DataLoader workers: 0 = every image is read and decoded in the calling process
 
 
 def parse_label_matrix(finding_labels) -> np.ndarray:
@@ -317,7 +318,7 @@ def get_hospital_dataloader(
     *,
     batch_size: int = DEFAULT_BATCH_SIZE,
     train: bool = True,
-    num_workers: int = 0,
+    num_workers: int = DEFAULT_NUM_WORKERS,
 ) -> DataLoader:
     idx_path = Path(partition_root) / f"hospital_{hospital_id}" / "indices.npy"
     if not idx_path.exists():
@@ -344,7 +345,7 @@ def get_test_dataloader(
     partition_root: str | Path,
     *,
     batch_size: int = 64,
-    num_workers: int = 0,
+    num_workers: int = DEFAULT_NUM_WORKERS,
     split: str = "test",
 ) -> DataLoader:
     """Held-out evaluation loader. `split` is "test" (final report only) or "val" (model selection)."""

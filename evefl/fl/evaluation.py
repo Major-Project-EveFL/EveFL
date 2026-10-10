@@ -12,6 +12,7 @@ Requires scikit-learn (added to requirements.txt) for roc_auc_score.
 from __future__ import annotations
 
 import logging
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -22,6 +23,7 @@ import torch.nn as nn
 from evefl.fl.client import set_model_parameters
 from evefl.fl.dataset import get_test_dataloader
 from evefl.fl.model import CHESTXRAY_LABELS, build_resnet18, get_device
+from evefl.profiling import LoaderMeter, begin_phase, end_phase, timed_iter
 
 log = logging.getLogger(__name__)
 
@@ -105,6 +107,7 @@ def evaluate_global_model(
                           model-selection metric on the validation split (docs/06)
     Written verbatim into each round's `server_eval` entry of the results JSON.
     """
+    setup_started = time.perf_counter()
     device = device or get_device()
     model = build_resnet18(pretrained=False)
     set_model_parameters(model, ndarrays)
@@ -114,10 +117,13 @@ def evaluate_global_model(
     criterion = nn.BCEWithLogitsLoss()
     loader = get_test_dataloader(data_root, partition_root, batch_size=batch_size, split=split)
 
+    setup_s = time.perf_counter() - setup_started  # model build + dataset construction (CSV parse, labels)
+    meter = LoaderMeter()
+    started = begin_phase()
     total_loss, total_examples = 0.0, 0
     all_targets, all_probs = [], []
 
-    for images, targets in loader:
+    for images, targets in timed_iter(loader, meter):
         images = images.to(device, non_blocking=True)
         targets = targets.to(device, non_blocking=True)
 
@@ -130,10 +136,12 @@ def evaluate_global_model(
         all_targets.append(targets.cpu().numpy())
         all_probs.append(torch.sigmoid(logits).cpu().numpy())
 
+    phase = end_phase(meter, started)
     if total_examples == 0:
         log.warning("Global eval: test set was empty — check partition_root.")
         return float("nan"), {"macro_auc_roc": float("nan"), "per_class_auc": {}, "skipped_classes": list(CHESTXRAY_LABELS),
                               "n_scored_classes": 0, "n_test_examples": 0,
+                              "timing": {**phase, "setup_s": setup_s, "metric_s": 0.0},
                               "n_positives_per_class": {label: 0 for label in CHESTXRAY_LABELS}, "thin_classes": [],
                               "min_positives": MIN_POSITIVES_FOR_SELECTION, "macro_auc_roc_excl_thin": float("nan")}
 
@@ -141,8 +149,11 @@ def evaluate_global_model(
     y_true = np.concatenate(all_targets, axis=0)
     y_score = np.concatenate(all_probs, axis=0)
 
+    metric_started = time.perf_counter()
     per_class_auc, skipped = _per_class_auc_roc(y_true, y_score)
     macro_auc = float(np.mean(list(per_class_auc.values()))) if per_class_auc else float("nan")
+    support = _support_summary(y_true, per_class_auc)
+    metric_s = time.perf_counter() - metric_started
 
     metrics: Dict[str, Any] = {
         "macro_auc_roc": macro_auc,
@@ -150,7 +161,9 @@ def evaluate_global_model(
         "skipped_classes": skipped,
         "n_scored_classes": len(per_class_auc),
         "n_test_examples": total_examples,
-        **_support_summary(y_true, per_class_auc),
+        **support,
+        # profiling: loader wait vs compute over the evaluation loop, one-time setup, and the AUC computation
+        "timing": {**phase, "setup_s": setup_s, "metric_s": metric_s},
     }
 
     log.info(

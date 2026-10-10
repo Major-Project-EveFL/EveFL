@@ -35,8 +35,9 @@ not a later patch.
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Callable, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
 from flwr.client.client import Client
 from flwr.common import (
@@ -207,6 +208,7 @@ def run_sequential_fl(
     initial_parameters: Parameters,
     timeout: Optional[float] = None,
     run_federated_evaluate: bool = True,
+    clock_start: Optional[float] = None,
 ) -> Tuple[Parameters, SequentialHistory]:
     """
     Drive `num_rounds` of federated learning with no Ray, no
@@ -217,6 +219,9 @@ def run_sequential_fl(
     minus the client-manager registration/networking machinery that
     only matters for real distributed deployments or Ray simulation.
 
+    `clock_start` is the `time.perf_counter()` value that round timing is measured from (so GPU samples taken on the same
+    clock line up with the phases); default: the moment this function starts.
+
     Returns:
         (final_parameters, history)
     """
@@ -226,6 +231,7 @@ def run_sequential_fl(
     client_manager = SequentialClientManager(client_proxies)
     current_parameters = initial_parameters
     history = SequentialHistory()
+    clock_start = time.perf_counter() if clock_start is None else clock_start
 
     log.info(
         "Starting sequential (Ray-free) FL run: %d round(s), %d client(s).",
@@ -233,9 +239,12 @@ def run_sequential_fl(
     )
 
     for server_round in range(1, num_rounds + 1):
+        round_t0 = time.perf_counter()
+        phases: Dict[str, Dict[str, object]] = {}
         # ------------------------------------------------------------
         # FIT
         # ------------------------------------------------------------
+        fit_t0 = time.perf_counter()
         fit_instructions = strategy.configure_fit(server_round, current_parameters, client_manager)
 
         fit_results: List[Tuple[ClientProxy, FitRes]] = []
@@ -257,13 +266,20 @@ def run_sequential_fl(
         )
         if aggregated_parameters is not None:
             current_parameters = aggregated_parameters
+        phases["fit"] = _phase(
+            fit_t0, time.perf_counter(), clock_start,
+            {**_sum_client_timing([res.metrics for _, res in fit_results]),
+             "per_client": {proxy.cid: _client_timing(res.metrics) for proxy, res in fit_results}})
 
         # ------------------------------------------------------------
         # SERVER-SIDE EVAL (centralized held-out set, if strategy has one)
         # ------------------------------------------------------------
+        server_t0 = time.perf_counter()
         server_eval = strategy.evaluate(server_round, current_parameters)
+        server_t1 = time.perf_counter()
         if server_eval is not None:
             loss, metrics = server_eval
+            phases["server_eval_test"] = _phase(server_t0, server_t1, clock_start, _eval_timing(metrics))
             log.info("[Round %d] server-side eval: loss=%.4f metrics=%s", server_round, loss, metrics)
             _attach_eval_to_round_log(strategy, server_round, "server_eval", loss, metrics)
 
@@ -271,9 +287,12 @@ def run_sequential_fl(
         # VALIDATION EVAL (model selection; the test split above is for reporting only)
         # ------------------------------------------------------------
         evaluate_validation = getattr(strategy, "evaluate_validation", None)
+        val_t0 = time.perf_counter()
         val_eval = evaluate_validation(server_round, current_parameters) if evaluate_validation else None
+        val_t1 = time.perf_counter()
         if val_eval is not None:
             val_loss, val_metrics = val_eval
+            phases["server_eval_val"] = _phase(val_t0, val_t1, clock_start, _eval_timing(val_metrics))
             log.info("[Round %d] validation eval: loss=%.4f metrics=%s", server_round, val_loss, val_metrics)
             _attach_eval_to_round_log(strategy, server_round, "val_eval", val_loss, val_metrics)
 
@@ -281,6 +300,7 @@ def run_sequential_fl(
         # FEDERATED EVAL (optional, per-client evaluate())
         # ------------------------------------------------------------
         if run_federated_evaluate:
+            fed_t0 = time.perf_counter()
             eval_instructions = strategy.configure_evaluate(server_round, current_parameters, client_manager)
             if eval_instructions:
                 eval_results: List[Tuple[ClientProxy, EvaluateRes]] = []
@@ -298,14 +318,67 @@ def run_sequential_fl(
                         history.add_failure(server_round, "evaluate", proxy.cid, str(exc))
 
                 fed_loss, fed_metrics = strategy.aggregate_evaluate(server_round, eval_results, eval_failures)
+                phases["federated_eval"] = _phase(
+                    fed_t0, time.perf_counter(), clock_start, _sum_client_timing([res.metrics for _, res in eval_results]))
                 if fed_loss is not None:
                     _attach_eval_to_round_log(strategy, server_round, "federated_eval", fed_loss, fed_metrics)
+
+        round_t1 = time.perf_counter()
+        _attach_timing_to_round_log(strategy, server_round, {
+            "t_start": round_t0 - clock_start, "t_end": round_t1 - clock_start, "round_s": round_t1 - round_t0,
+            "phases": phases,
+        })
 
     log.info(
         "Sequential FL run complete: %d round(s), %d failure(s).",
         num_rounds, len(history.failures),
     )
     return current_parameters, history
+
+
+_TIMING_KEYS = ("data_wait_s", "compute_s", "n_images")
+
+
+def _client_timing(metrics: Dict[str, Scalar]) -> Dict[str, float]:
+    return {k: float(metrics[k]) for k in (*_TIMING_KEYS, "phase_s") if isinstance(metrics.get(k), (int, float))}
+
+
+def _sum_client_timing(metrics_list: Sequence[Dict[str, Scalar]]) -> Dict[str, float]:
+    """Sum the loader-wait / compute / image counters that clients report in their metrics."""
+    out = {k: 0.0 for k in _TIMING_KEYS}
+    for metrics in metrics_list:
+        for key in _TIMING_KEYS:
+            value = metrics.get(key)
+            if isinstance(value, (int, float)):
+                out[key] += float(value)
+    return out
+
+
+def _eval_timing(metrics: Dict[str, Scalar]) -> Dict[str, float]:
+    """The evaluation's own timing block (loop wait/compute, setup, metric computation), without its `phase_s`."""
+    timing = metrics.get("timing")
+    if not isinstance(timing, dict):
+        return {}
+    return {("loop_s" if k == "phase_s" else k): float(v) for k, v in timing.items() if isinstance(v, (int, float))}
+
+
+def _phase(t0: float, t1: float, clock_start: float, extra: Optional[Mapping[str, object]] = None) -> Dict[str, object]:
+    """Wall time of one phase of a round on the run clock; `phase_s` is what the data-wait share is divided by."""
+    out: Dict[str, object] = {"phase_s": t1 - t0, "wall_s": t1 - t0, "t_start": t0 - clock_start, "t_end": t1 - clock_start}
+    if extra:
+        out.update(extra)
+    return out
+
+
+def _attach_timing_to_round_log(strategy: Strategy, server_round: int, timing: Dict[str, object]) -> None:
+    """Add the round's timing block to `strategy.round_logs[-1]` (the log for this round), like the evals."""
+    round_logs = getattr(strategy, "round_logs", None)
+    if not round_logs:
+        return
+    last = round_logs[-1]
+    if last.get("round") != server_round:
+        return
+    last["timing"] = timing
 
 
 def _attach_eval_to_round_log(

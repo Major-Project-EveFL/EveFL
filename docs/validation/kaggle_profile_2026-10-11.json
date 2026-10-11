@@ -1,0 +1,302 @@
+{
+  "label": "measured on Kaggle (Python 3.13, torch 2.11, 2 x Tesla T4, 4 vCPU), extracted by script from the two results files saved by the team; NOT a CI environment. Counts and timings only: no AUC and no loss value is quoted.",
+  "recorded_in_repo_on": "2026-10-11",
+  "caveats": [
+    "Pipeline check on a 5% patient subset: 3 clients, 5 rounds, 1 local epoch, batch 32, pretrained ResNet-18. It is not a baseline, and nothing in the run's AUC columns may be quoted as a result.",
+    "The two results JSONs stay in results/kaggle (git-ignored); their SHA-256 values are recorded below.",
+    "Round 1 contains the one-time filename-to-path index build (about 290 s, measured by the micro-benchmark) and cold file reads; rounds 2 to 5 are the steady state and are the ones quoted for rates.",
+    "'compute' is everything in a phase except the time blocked on the DataLoader: host-to-device copy, forward, backward, optimiser and metric code. The compute-only rate is therefore a lower bound on what the GPU can do.",
+    "phase_s is the wall time of the whole phase; data_wait_s and compute_s cover the loop only, so phase_s exceeds their sum by setup (model build, dataset construction) and metric code: about a second per phase here.",
+    "Only GPU 0 was used (the runner is single-device); GPU 1 shows 0% utilisation by construction."
+  ],
+  "source_files": {
+    "lite_alpha0_seed0_profile.json": {
+      "sha256": "ab5eee0a46862c8b768f8e0174d8c5889191c176b012c41dcbd0cf93c81ec660",
+      "bytes": 200584
+    },
+    "profile_loading.json": {
+      "sha256": "9542399662eff1436f9e57e8135f6dfcf2333c7dbed42cf7377a16c75bc21bd1",
+      "bytes": 12099
+    }
+  },
+  "code_commit": "4901581 (main, as printed by the Kaggle clone cell)",
+  "environment": {
+    "python": "3.13.15",
+    "system": "Linux",
+    "machine": "x86_64",
+    "torch": "2.11.0+cu128",
+    "torchvision": "0.26.0+cu128",
+    "numpy": "2.1.3",
+    "scipy": "1.16.3",
+    "pandas": "2.3.3",
+    "scikit-learn": "1.6.1",
+    "flwr": "1.13.0",
+    "cryptography": "50.0.1",
+    "pycryptodome": "3.23.0",
+    "PyYAML": "6.0.3",
+    "qiskit": null,
+    "qiskit-aer": null,
+    "tenseal": null
+  },
+  "device": {
+    "default_device": "cuda",
+    "device_count": 2,
+    "devices": [
+      {
+        "name": "Tesla T4",
+        "total_memory_mib": 14912
+      },
+      {
+        "name": "Tesla T4",
+        "total_memory_mib": 14912
+      }
+    ],
+    "cpu_count": 4,
+    "torch_num_threads": 2
+  },
+  "run": {
+    "name": "lite_alpha0_seed0_profile",
+    "config_hash": "778194da04f2ec74",
+    "seed": 0,
+    "num_rounds": 5,
+    "num_clients": 3,
+    "local_epochs": 1,
+    "batch_size": 32,
+    "pretrained": true,
+    "evaluation": {
+      "federated_evaluate": false,
+      "test_eval_every": 1,
+      "val_eval_every": 1,
+      "final_round_always_evaluated": true,
+      "selection_uses": "validation split only"
+    },
+    "dataloader": {
+      "num_workers": 0,
+      "batch_size": 32,
+      "pin_memory": true
+    },
+    "state_counts": {
+      "SECURE": 5
+    },
+    "failures": 0,
+    "rounds_discarded": 0,
+    "elapsed_seconds": 936.4
+  },
+  "partition_lite": {
+    "subset_fraction": 0.05,
+    "seed": 42,
+    "hospital_images": [
+      1095,
+      1232,
+      1975
+    ],
+    "test_images": 664,
+    "val_images": 512,
+    "note": "from the partition audit printed in the same notebook (RESULT: OK, disjoint at patient and image level)"
+  },
+  "rounds": [
+    {
+      "round": 1,
+      "state": "SECURE",
+      "round_s": 391.93,
+      "phases": {
+        "fit": {
+          "phase_s": 356.33,
+          "data_wait_s": 341.42,
+          "compute_s": 13.38,
+          "n_images": 4256
+        },
+        "server_eval_test": {
+          "phase_s": 20.01,
+          "data_wait_s": 18.69,
+          "compute_s": 0.72,
+          "n_images": 664
+        },
+        "server_eval_val": {
+          "phase_s": 15.59,
+          "data_wait_s": 14.62,
+          "compute_s": 0.55,
+          "n_images": 512
+        }
+      }
+    },
+    {
+      "round": 2,
+      "state": "SECURE",
+      "round_s": 135.98,
+      "phases": {
+        "fit": {
+          "phase_s": 107.97,
+          "data_wait_s": 95.09,
+          "compute_s": 12.44,
+          "n_images": 4256
+        },
+        "server_eval_test": {
+          "phase_s": 15.75,
+          "data_wait_s": 14.58,
+          "compute_s": 0.72,
+          "n_images": 664
+        },
+        "server_eval_val": {
+          "phase_s": 12.25,
+          "data_wait_s": 11.28,
+          "compute_s": 0.55,
+          "n_images": 512
+        }
+      }
+    },
+    {
+      "round": 3,
+      "state": "SECURE",
+      "round_s": 135.91,
+      "phases": {
+        "fit": {
+          "phase_s": 107.95,
+          "data_wait_s": 94.82,
+          "compute_s": 12.71,
+          "n_images": 4256
+        },
+        "server_eval_test": {
+          "phase_s": 15.78,
+          "data_wait_s": 14.61,
+          "compute_s": 0.72,
+          "n_images": 664
+        },
+        "server_eval_val": {
+          "phase_s": 12.18,
+          "data_wait_s": 11.2,
+          "compute_s": 0.55,
+          "n_images": 512
+        }
+      }
+    },
+    {
+      "round": 4,
+      "state": "SECURE",
+      "round_s": 135.68,
+      "phases": {
+        "fit": {
+          "phase_s": 107.38,
+          "data_wait_s": 94.05,
+          "compute_s": 12.93,
+          "n_images": 4256
+        },
+        "server_eval_test": {
+          "phase_s": 15.85,
+          "data_wait_s": 14.67,
+          "compute_s": 0.72,
+          "n_images": 664
+        },
+        "server_eval_val": {
+          "phase_s": 12.45,
+          "data_wait_s": 11.48,
+          "compute_s": 0.55,
+          "n_images": 512
+        }
+      }
+    },
+    {
+      "round": 5,
+      "state": "SECURE",
+      "round_s": 136.92,
+      "phases": {
+        "fit": {
+          "phase_s": 108.53,
+          "data_wait_s": 95.4,
+          "compute_s": 12.71,
+          "n_images": 4256
+        },
+        "server_eval_test": {
+          "phase_s": 15.9,
+          "data_wait_s": 14.72,
+          "compute_s": 0.72,
+          "n_images": 664
+        },
+        "server_eval_val": {
+          "phase_s": 12.49,
+          "data_wait_s": 11.51,
+          "compute_s": 0.55,
+          "n_images": 512
+        }
+      }
+    }
+  ],
+  "summary": {
+    "phase_seconds_all_rounds": {
+      "fit": 788.2,
+      "server_eval_test": 83.3,
+      "server_eval_val": 65.0
+    },
+    "images_per_s_all_rounds": {
+      "fit": 27.0,
+      "server_eval_test": 39.9,
+      "server_eval_val": 39.4
+    },
+    "data_wait_share_loaded": 0.9164,
+    "rule_50_percent": {
+      "threshold": 0.5,
+      "data_wait_exceeds_threshold": true
+    }
+  },
+  "derived_round_2": {
+    "fit_compute_only_images_per_s": 342.1,
+    "fit_delivered_images_per_s": 39.4,
+    "val_compute_only_images_per_s": 930.9,
+    "test_compute_only_images_per_s": 922.2,
+    "note": "arithmetic on the per-phase numbers above; the fit n_images 4256 = sum of floor(n/32)*32 over the three hospitals (drop_last)"
+  },
+  "gpu": {
+    "n_samples": 459,
+    "interval_s": 2.0,
+    "mean_util_pct_all_samples": {
+      "0": 7.2,
+      "1": 0.0
+    },
+    "mean_util_pct_round2_fit_gpu0": 15.9
+  },
+  "micro_benchmark": {
+    "n_images": 300,
+    "seed": 0,
+    "stage_ms_per_image_first_pass": {
+      "read_bytes": 8.76,
+      "decode": 12.08,
+      "convert_rgb": 1.5,
+      "resize": 6.24,
+      "center_crop": 0.11,
+      "to_tensor": 0.65,
+      "normalize": 0.34,
+      "total": 29.67
+    },
+    "stage_ms_per_image_second_pass": {
+      "read_bytes": 1.22,
+      "decode": 12.15,
+      "convert_rgb": 1.53,
+      "resize": 6.32,
+      "center_crop": 0.1,
+      "to_tensor": 0.45,
+      "normalize": 0.25,
+      "total": 22.01
+    },
+    "single_process_images_per_s": 45.4,
+    "dataloader_images_per_s": {
+      "0": 45.3,
+      "2": 77.1,
+      "4": 98.5
+    },
+    "compute_ceiling_synthetic": {
+      "batch_size": 32,
+      "device": "cuda",
+      "forward_images_per_s": 1025.9,
+      "train_images_per_s": 366.4
+    },
+    "path_index_seconds_for_112120_files": 290.0,
+    "criterion_decode_below_half_of_compute": true
+  },
+  "pre_registered_rule": {
+    "defined_in": "docs/06_EXPERIMENT_PROTOCOL.md (data-loading rule, written 2026-10-10 before this run)",
+    "run_part_data_wait_ge_0_5": true,
+    "micro_benchmark_part": true,
+    "device_condition_cuda": true,
+    "conclusion": "all three parts hold; a preprocessing cache is justified"
+  }
+}

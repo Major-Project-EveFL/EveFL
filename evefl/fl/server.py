@@ -61,7 +61,14 @@ from flwr.common import ndarrays_to_parameters
 from evefl import environment as _environment
 from evefl.fl.channels import ChannelPlan, build_plan
 from evefl.fl.client import DEFAULT_LR, DEFAULT_WEIGHT_DECAY, create_client_fn, get_model_parameters
-from evefl.fl.dataset import DEFAULT_NUM_WORKERS, partition_and_save
+from evefl.fl.dataset import (
+    DEFAULT_IMAGE_BACKEND,
+    DEFAULT_NUM_WORKERS,
+    ImageBackend,
+    create_image_backend,
+    image_backend_registry,
+    partition_and_save,
+)
 from evefl.fl.evaluation import make_evaluate_fn
 from evefl.fl.model import build_resnet18, describe_initialisation
 from evefl.fl.runner import build_local_client_proxies, run_sequential_fl
@@ -181,6 +188,7 @@ def build_eval_fns(
     num_rounds: int,
     test_eval_every: int = 1,
     val_eval_every: int = 1,
+    image_backend: Optional[ImageBackend] = None,
 ):
     """
     The two server-side evaluation callbacks.
@@ -193,11 +201,12 @@ def build_eval_fns(
     eval_batch = max(batch_size, 64)
     test_fn = make_evaluate_fn(
         data_root=data_root, partition_root=partition_root, batch_size=eval_batch,
-        every_n_rounds=test_eval_every, num_rounds=num_rounds, split="test")
+        every_n_rounds=test_eval_every, num_rounds=num_rounds, split="test", image_backend=image_backend)
     has_val = (Path(partition_root) / "val" / "indices.npy").exists()
     val_fn = make_evaluate_fn(
         data_root=data_root, partition_root=partition_root, batch_size=eval_batch,
-        every_n_rounds=val_eval_every, num_rounds=num_rounds, split="val") if has_val else None
+        every_n_rounds=val_eval_every, num_rounds=num_rounds, split="val",
+        image_backend=image_backend) if has_val else None
     return test_fn, val_fn
 
 
@@ -232,6 +241,7 @@ def run_experiment(
     test_eval_every: int = 1,
     val_eval_every: int = 1,
     run_federated_evaluate: bool = False,
+    image_backend: Optional[ImageBackend] = None,
 ) -> Dict[str, Any]:
     """
     Run one complete EveFL federated-learning experiment on the
@@ -258,6 +268,7 @@ def run_experiment(
     else:
         bit_flip_probability_for_strategy = bit_flip_probability
 
+    backend = image_backend if image_backend is not None else create_image_backend()  # PNG unless one is given
     set_global_seed(seed)
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -268,6 +279,7 @@ def run_experiment(
     client_fn = create_client_fn(
         data_root, partition_root,
         batch_size=batch_size, local_epochs=local_epochs, lr=lr, weight_decay=weight_decay,
+        image_backend=backend,
     )
     client_proxies = build_local_client_proxies(client_fn, num_clients=num_clients)
 
@@ -275,7 +287,7 @@ def run_experiment(
     # thresholds on. `server_eval` (test) is for the final report and runs every `test_eval_every` rounds + the last.
     evaluate_fn, val_evaluate_fn = build_eval_fns(
         data_root=data_root, partition_root=partition_root, batch_size=batch_size, num_rounds=num_rounds,
-        test_eval_every=test_eval_every, val_eval_every=val_eval_every,
+        test_eval_every=test_eval_every, val_eval_every=val_eval_every, image_backend=backend,
     )
 
     strategy = create_strategy(
@@ -346,6 +358,8 @@ def run_experiment(
             "weight_decay": weight_decay,
         },
         profile=profile_block,
+        data_backend=backend.describe(),
+        data_backend_identity=backend.config_identity(),
         evaluation={
             "federated_evaluate": run_federated_evaluate,
             "test_eval_every": test_eval_every,
@@ -406,6 +420,8 @@ def build_experiment_log(
     channel_plan: Optional[Dict[str, Any]] = None,
     profile: Optional[Dict[str, Any]] = None,
     evaluation: Optional[Dict[str, Any]] = None,
+    data_backend: Optional[Dict[str, Any]] = None,
+    data_backend_identity: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     state_counts: Dict[str, int] = {}
     exclusion_counts: Dict[str, int] = {}  # reason -> number of (client, round) exclusions
@@ -430,9 +446,13 @@ def build_experiment_log(
         "policy": policy,
         "channel_plan": channel_plan,
     }
+    if data_backend_identity is not None:
+        # Only a non-default image backend changes the config hash, so every hash made with the PNG backend stays valid.
+        config["image_backend"] = data_backend_identity
     config_hash = hashlib.sha256(json.dumps(config, sort_keys=True).encode("utf-8")).hexdigest()[:16]
 
-    provenance: Dict[str, Any] = {}
+    # Every results JSON states where its images came from; for the cache this is its SHA-256 (docs/06).
+    provenance: Dict[str, Any] = {"data_backend": data_backend or {"name": DEFAULT_IMAGE_BACKEND, "cache_sha256": None}}
     if profile is not None:
         provenance["profile"] = profile        # hardware and timing: measurements, never part of the config hash
     if evaluation is not None:
@@ -532,6 +552,13 @@ def _build_arg_parser() -> argparse.ArgumentParser:
                          "controller. The value is recorded in the results JSON.")
     p.add_argument("--no-federated-evaluate", action="store_true",
                     help="Deprecated no-op: federated evaluation is already off by default.")
+    p.add_argument("--image-backend", type=str, default=DEFAULT_IMAGE_BACKEND,
+                    choices=sorted(image_backend_registry.list_keys()),
+                    help="Where model input images come from: png (decode every image every epoch; the default and the "
+                         "reference) or uint8_cache (pre-resized uint8 shards from scripts/build_image_cache.py). "
+                         "Recorded in the results JSON; part of config_hash only when it is not png.")
+    p.add_argument("--image-cache-root", type=Path, default=None,
+                    help="Folder holding index.json of the uint8 cache (required with --image-backend uint8_cache).")
     return p
 
 
@@ -553,6 +580,7 @@ def main(argv=None) -> None:
     else:
         log.info("Using existing partition at %s", args.partition_root)
 
+    image_backend = create_image_backend(args.image_backend, args.image_cache_root)
     schedule = ATTACK_SCHEDULES[args.attack_schedule] if args.attack_schedule else None
     channel_plan = None
     if args.link_attack or args.link_noise:
@@ -588,6 +616,7 @@ def main(argv=None) -> None:
         weight_decay=args.weight_decay,
         test_eval_every=args.test_eval_every,
         run_federated_evaluate=args.federated_evaluate,
+        image_backend=image_backend,
     )
 
     log.info("Done: %s", summary)

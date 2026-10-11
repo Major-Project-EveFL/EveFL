@@ -25,8 +25,9 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Optional
+from typing import Any, ClassVar, Dict, Optional, Sized, cast
 
 import numpy as np
 import pandas as pd
@@ -34,8 +35,10 @@ import torch
 from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 
+from evefl.fl.imagecache import CacheReader, center_crop_view, random_crop_flip_view
 from evefl.fl.model import CHESTXRAY_LABELS, NUM_CLASSES, get_eval_transform, get_train_transform
 from evefl.fl.partition import audit_partition, split_by_patient
+from evefl.registry import Registry
 
 log = logging.getLogger(__name__)
 
@@ -153,6 +156,120 @@ class ChestXray14Dataset(Dataset):
     def labels(self) -> torch.Tensor:
         """Full label matrix — used by the partitioner for class statistics."""
         return self._labels
+
+
+class CachedChestXray14Dataset(Dataset):
+    """
+    The uint8 cache backend (evefl/fl/imagecache.py): the same images and labels as `ChestXray14Dataset`, served from the
+    pre-resized cache. Each item is a CPU `uint8` tensor [1, 224, 224] and the multi-hot label vector. Cropping (centre for
+    evaluation, random crop + horizontal flip for training) happens here; the expansion to three channels and the
+    normalisation happen on the device in `evefl.fl.model.prepare_batch`. No CUDA call is made in this class, so DataLoader
+    workers may be forked.
+    """
+
+    def __init__(self, data_root: str | Path, cache_root: str | Path, indices: Optional[np.ndarray] = None,
+                 *, train: bool = False):
+        df = load_metadata(data_root)
+        self._reader = CacheReader(cache_root)
+        self._reader.check_names([str(x) for x in df["Image Index"].to_numpy()])
+        label_matrix = torch.from_numpy(parse_label_matrix(df["Finding Labels"]))
+        self._rows: np.ndarray = np.arange(len(df)) if indices is None else np.asarray(indices)
+        self._labels: torch.Tensor = label_matrix[self._rows]
+        self.train = train
+
+    def __len__(self) -> int:
+        return len(self._rows)
+
+    def __getitem__(self, idx: int):
+        arr = self._reader.image(int(self._rows[idx]))
+        view = random_crop_flip_view(arr) if self.train else center_crop_view(arr)
+        return torch.from_numpy(np.array(view, dtype=np.uint8)).unsqueeze(0), self._labels[idx]
+
+    @property
+    def labels(self) -> torch.Tensor:
+        return self._labels
+
+
+# ---------------------------------------------------------------------------
+# Image backends (registry; `settings.yaml: data.image_backend`, `--image-backend`)
+# ---------------------------------------------------------------------------
+
+class ImageBackend(ABC):
+    """Where the model's input images come from. The PNG backend is the default and the reference."""
+
+    name: ClassVar[str] = ""
+
+    def __init__(self, cache_root: Optional[str | Path] = None) -> None:
+        self.cache_root: Optional[Path] = Path(cache_root) if cache_root is not None else None
+
+    @abstractmethod
+    def make_dataset(self, data_root: str | Path, indices: Optional[np.ndarray], *, train: bool) -> Dataset:
+        """A dataset over the metadata rows `indices` (all rows if None), with training or evaluation preprocessing."""
+
+    @abstractmethod
+    def describe(self) -> Dict[str, Any]:
+        """JSON-ready provenance for `experiment.data_backend` of every results JSON."""
+
+    def config_identity(self) -> Optional[Dict[str, Any]]:
+        """What this backend adds to `config_hash`; None for the default PNG backend so earlier hashes stay valid."""
+        return None
+
+
+image_backend_registry: Registry[ImageBackend] = Registry("image_backend")
+DEFAULT_IMAGE_BACKEND = "png"
+
+
+@image_backend_registry.register("png")
+class PngBackend(ImageBackend):
+    """Decode the PNG and run the torchvision transform for every image of every epoch (the original pipeline)."""
+
+    name = "png"
+
+    def __init__(self, cache_root: Optional[str | Path] = None):
+        if cache_root is not None:
+            raise ValueError("The png image backend does not use a cache root; refusing to ignore --image-cache-root.")
+        super().__init__(None)
+
+    def make_dataset(self, data_root: str | Path, indices: Optional[np.ndarray], *, train: bool) -> Dataset:
+        transform = get_train_transform() if train else get_eval_transform()
+        return ChestXray14Dataset(data_root, indices=indices, transform=transform)
+
+    def describe(self) -> Dict[str, Any]:
+        return {"name": "png", "cache_sha256": None}
+
+
+@image_backend_registry.register("uint8_cache")
+class Uint8CacheBackend(ImageBackend):
+    """Serve pre-resized uint8 images from a cache built by `scripts/build_image_cache.py`."""
+
+    name = "uint8_cache"
+
+    def __init__(self, cache_root: Optional[str | Path] = None):
+        if cache_root is None:
+            raise ValueError("The uint8_cache image backend needs --image-cache-root (the folder holding index.json).")
+        super().__init__(cache_root)
+        self._root = Path(cache_root)
+        self._reader = CacheReader(self._root)  # fails now if the cache is missing or incomplete
+
+    def make_dataset(self, data_root: str | Path, indices: Optional[np.ndarray], *, train: bool) -> Dataset:
+        return CachedChestXray14Dataset(data_root, self._root, indices=indices, train=train)
+
+    def describe(self) -> Dict[str, Any]:
+        meta = self._reader.meta()
+        return {
+            "name": "uint8_cache", "cache_sha256": self._reader.cache_sha256, "n_images": self._reader.n_images,
+            "image_size": self._reader.index["image_size"], "shard_size": self._reader.shard_size,
+            "resize": self._reader.index["resize"], "libraries_at_build": meta.get("libraries"),
+            "cache_folder": self._root.name,
+        }
+
+    def config_identity(self) -> Optional[Dict[str, Any]]:
+        return {"name": "uint8_cache", "cache_sha256": self._reader.cache_sha256}
+
+
+def create_image_backend(name: str = DEFAULT_IMAGE_BACKEND, cache_root: Optional[str | Path] = None) -> ImageBackend:
+    """Build a backend by registry key (settings.yaml `data.image_backend` / `data.image_cache_root`, or the CLI flags)."""
+    return image_backend_registry.get(name)(cache_root)
 
 
 # ---------------------------------------------------------------------------
@@ -319,6 +436,7 @@ def get_hospital_dataloader(
     batch_size: int = DEFAULT_BATCH_SIZE,
     train: bool = True,
     num_workers: int = DEFAULT_NUM_WORKERS,
+    image_backend: Optional[ImageBackend] = None,
 ) -> DataLoader:
     idx_path = Path(partition_root) / f"hospital_{hospital_id}" / "indices.npy"
     if not idx_path.exists():
@@ -327,8 +445,8 @@ def get_hospital_dataloader(
         )
 
     indices = np.load(idx_path)
-    transform = get_train_transform() if train else get_eval_transform()
-    dataset = ChestXray14Dataset(data_root, indices=indices, transform=transform)
+    backend = image_backend if image_backend is not None else create_image_backend()
+    dataset = backend.make_dataset(data_root, indices, train=train)
 
     return DataLoader(
         dataset,
@@ -336,7 +454,7 @@ def get_hospital_dataloader(
         shuffle=train,
         num_workers=num_workers,
         pin_memory=torch.cuda.is_available(),
-        drop_last=train and len(dataset) > batch_size,
+        drop_last=train and len(cast(Sized, dataset)) > batch_size,
     )
 
 
@@ -347,6 +465,7 @@ def get_test_dataloader(
     batch_size: int = 64,
     num_workers: int = DEFAULT_NUM_WORKERS,
     split: str = "test",
+    image_backend: Optional[ImageBackend] = None,
 ) -> DataLoader:
     """Held-out evaluation loader. `split` is "test" (final report only) or "val" (model selection)."""
     if split not in ("test", "val"):
@@ -358,7 +477,8 @@ def get_test_dataloader(
         )
 
     indices = np.load(idx_path)
-    dataset = ChestXray14Dataset(data_root, indices=indices, transform=get_eval_transform())
+    backend = image_backend if image_backend is not None else create_image_backend()
+    dataset = backend.make_dataset(data_root, indices, train=False)
 
     return DataLoader(
         dataset,

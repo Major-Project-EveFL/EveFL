@@ -26,6 +26,10 @@ orchestration:
     caution_max: 0.11    # 5% <= QBER < 11% -> CAUTION
                           # QBER >= 11% -> LOCKDOWN (never configurable below 0.11)
 
+data:
+  image_backend: png        # png (decode every image every epoch: the default and the reference) | uint8_cache
+  image_cache_root: null    # folder with index.json of the uint8 cache; required for uint8_cache (scripts/build_image_cache.py)
+
 fl:
   local_epochs: 5
   model: resnet18

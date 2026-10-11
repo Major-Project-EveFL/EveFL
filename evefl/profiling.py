@@ -221,6 +221,8 @@ def summarize_rounds(round_logs: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
     images: Dict[str, float] = {}
     wait_loaded = 0.0
     wall_loaded = 0.0
+    wait_r2 = 0.0   # rounds >= 2 only: round 1 holds the one-time path index and cold file reads (docs/06, image cache)
+    wall_r2 = 0.0
     n_rounds = 0
     for log in round_logs:
         timing = log.get("timing")
@@ -234,12 +236,17 @@ def summarize_rounds(round_logs: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
             if name in LOADED_PHASES and "data_wait_s" in phase:
                 wait_loaded += float(phase["data_wait_s"])
                 wall_loaded += wall
+                if int(log.get("round", 0)) >= 2:
+                    wait_r2 += float(phase["data_wait_s"])
+                    wall_r2 += wall
     share = (wait_loaded / wall_loaded) if wall_loaded > 0 else None
+    share_r2 = (wait_r2 / wall_r2) if wall_r2 > 0 else None
     return {
         "n_rounds_with_timing": n_rounds,
         "phase_seconds": seconds,
         "images_per_s": {k: (images[k] / seconds[k]) for k in seconds if seconds[k] > 0 and images.get(k)},
         "data_wait_share_loaded": share,
+        "data_wait_share_loaded_from_round_2": share_r2,
         "rule_50_percent": {
             "threshold": DATA_WAIT_THRESHOLD,
             "data_wait_share": share,

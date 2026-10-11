@@ -31,8 +31,8 @@ import torch.nn as nn
 from flwr.client import Client, NumPyClient
 from flwr.common import Scalar
 
-from evefl.fl.dataset import get_hospital_dataloader
-from evefl.fl.model import build_resnet18, get_criterion, get_device
+from evefl.fl.dataset import ImageBackend, get_hospital_dataloader
+from evefl.fl.model import build_resnet18, get_criterion, get_device, prepare_batch
 from evefl.orchestration.state_machine import SecurityState
 from evefl.profiling import LoaderMeter, begin_phase, end_phase, timed_iter
 
@@ -109,7 +109,7 @@ def _train_one_client(
     started = begin_phase()
     for _epoch in range(epochs):
         for images, targets in timed_iter(dataloader, meter):
-            images, targets = images.to(device), targets.to(device)
+            images, targets = prepare_batch(images, device), targets.to(device)
             optimizer.zero_grad()
             logits = model(images)
             loss = criterion(logits, targets)
@@ -141,7 +141,7 @@ def _evaluate_one_client(
 
     total_loss, total_examples = 0.0, 0
     for images, targets in timed_iter(dataloader, meter):
-        images, targets = images.to(device), targets.to(device)
+        images, targets = prepare_batch(images, device), targets.to(device)
         logits = model(images)
         loss = criterion(logits, targets)
         n = images.shape[0]
@@ -173,6 +173,7 @@ class EveFLClient(NumPyClient):
         lr: float = DEFAULT_LR,
         weight_decay: float = DEFAULT_WEIGHT_DECAY,
         device: torch.device | None = None,
+        image_backend: Optional[ImageBackend] = None,
     ):
         self.cid = cid
         self.hospital_id = int(cid)
@@ -183,6 +184,7 @@ class EveFLClient(NumPyClient):
         self.lr = lr  # fallback only; the per-round rate normally arrives as config["learning_rate"]
         self.weight_decay = weight_decay
         self.device = device or get_device()
+        self.image_backend = image_backend  # None = the PNG backend (the default)
 
         # Pretrained or not is decided ONCE, by the server's initial parameters; every round the
         # server overwrites all client weights (incl. BatchNorm buffers) before local training, so
@@ -194,7 +196,7 @@ class EveFLClient(NumPyClient):
         if self._train_loader is None:
             self._train_loader = get_hospital_dataloader(
                 self.data_root, self.partition_root, self.hospital_id,
-                batch_size=self.batch_size, train=True,
+                batch_size=self.batch_size, train=True, image_backend=self.image_backend,
             )
         return self._train_loader
 
@@ -260,6 +262,7 @@ def create_client_fn(
     local_epochs: int = DEFAULT_LOCAL_EPOCHS,
     lr: float = DEFAULT_LR,
     weight_decay: float = DEFAULT_WEIGHT_DECAY,
+    image_backend: Optional[ImageBackend] = None,
 ) -> Callable[[str], Client]:
     """
     Factory matching what `flwr.simulation.start_simulation(client_fn=...)`
@@ -273,6 +276,7 @@ def create_client_fn(
         return EveFLClient(
             cid, data_root, partition_root,
             batch_size=batch_size, local_epochs=local_epochs, lr=lr, weight_decay=weight_decay,
+            image_backend=image_backend,
         ).to_client()
 
     return client_fn

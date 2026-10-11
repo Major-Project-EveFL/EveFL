@@ -237,3 +237,48 @@ values are fixed here; they are not tuned on results.
 6. **Linearity caveat.** The normalisation assumes the update scales roughly linearly with the learning rate. FedProx in CAUTION
    and the optimiser make that approximate; the honest-run measurement in item 4 is what tells whether it is good enough.
 7. **Deviations** from this rule are listed in this file with the reason and the date, as for the sweeps above.
+
+## Pre-registered: acceptance of the uint8 image cache (before any cache is built)
+Written 2026-10-11, after the profile of the 5% lite run (`docs/validation/kaggle_profile_2026-10-11.json`: data wait 92% of
+the loaded phases, so the pre-registered loading rule above holds) and before any cache exists. The cache is an optional
+backend (`--image-backend uint8_cache`); the PNG backend stays the default and the reference.
+
+**What the cache is.** For every row of `Data_Entry_2017.csv`, in row order: `torchvision.transforms.Resize(256)` applied to
+`Image.open(path).convert("RGB")` (the call the PNG pipeline makes), reduced to one `uint8` channel after checking that the
+three channels are equal. It is stored in shards of 4096 images. At load time the channel is expanded to three on the device
+and normalised there with the ImageNet mean and std; evaluation crops the centre 224 x 224, training crops a random 224 x 224
+and flips with the same torch RNG calls, in the same order, as `RandomCrop` and `RandomHorizontalFlip`.
+
+**Build rules.**
+1. Every shard is attempted. An image that cannot be read, is not 256 x 256 after the resize, or whose three channels differ is
+   written to `failures.json` (row, name, reason) and counted; the build then exits non-zero and writes no `index.json`.
+   There is no silent fallback to the PNG file. If any image is to be left out of an experiment, the exclusion is decided
+   after the list is seen, applies identically to both backends, and is recorded in the results JSON.
+2. The meta file records Python, NumPy, Pillow and torchvision versions, the SHA-256 of the metadata CSV, the number of source
+   images per PNG mode, the build command and the build seconds. `cache_sha256` is the SHA-256 of `index.json`, which holds
+   the SHA-256 of every shard and of the ordered image names.
+3. Pillow and torchvision versions are part of the cache's identity: a different resampling implementation could differ by one
+   grey level, so the pixel check is repeated on any machine that builds a cache.
+
+**Acceptance (all must hold; nothing is tuned on the outcome).**
+1. Zero build failures, or every failure listed in `failures.json` and the decision about it recorded here with its date.
+2. Pixel equality: on a verification sample of 1000 randomly drawn rows (seed 0) plus every row whose source mode is not `L`
+   (a seed-0 sample of 1000 of them if there are more), the evaluation pipeline output of the cache backend is bit-identical
+   (`torch.equal`) to the PNG backend's, and the stored array equals channel 0 of `Resize(256)(img.convert("RGB"))`. Any
+   mismatch fails the cache.
+3. Re-reading every shard reproduces the SHA-256 values in `index.json`.
+4. In the lite alpha = 0 run on the cache backend, the data-wait share of the loaded phases is below 0.5. It is read from
+   round 2 onward (`experiment.profile.summary.data_wait_share_loaded_from_round_2`), because round 1 includes the one-time
+   path index and cold reads of the attached dataset (the page cache is empty for the first pass over the shards). The
+   round 1 share is reported next to it. If the share is 0.5 or more, the result is reported and diagnosed here; the
+   threshold is not changed.
+5. The lite run's per-round validation and test metrics on the two backends (same seed, same partition) are reported side by
+   side and are not a pass or fail test: GPU run-to-run variation has not been measured, and the pixel equality in item 2 is
+   the proof that the model input is unchanged.
+
+**Reported with the cache.** Build seconds and images per second, `cache_sha256`, on-disk bytes, the PNG mode counts, the
+verification sample size and result, and the per-phase timing of the lite run on both backends. Every results JSON records
+`experiment.data_backend` (name, and for the cache its `cache_sha256` and versions). The backend enters `config_hash` only when
+it is not the PNG default, so every earlier hash stays valid.
+
+**Deviations** from this rule are listed in this file with the reason and the date, as for the sweeps above.

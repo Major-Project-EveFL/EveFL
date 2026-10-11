@@ -86,6 +86,9 @@ streamlit run dashboard/app.py
   written into the results JSON. `--federated-evaluate` (off by default) and `--test-eval-every N` (test every N rounds + the
   last; validation every round and alone drives selection) are recorded under `experiment.evaluation`; `experiment.profile`
   holds device, nvidia-smi samples and time per phase (loader wait vs compute); `scripts/profile_loading.py` is the micro-benchmark.
+  `--image-backend png|uint8_cache` (+ `--image-cache-root`): `png` is the default and the reference; `uint8_cache` serves the
+  pre-resized shards built by `scripts/build_image_cache.py` (acceptance in docs/06). Every results JSON records
+  `experiment.data_backend` (and the cache SHA-256); the backend is in `config_hash` only when it is not `png`.
 - Dev tools: `pip install -r requirements-dev.txt`; `ruff check .`; `mypy` (the whole `evefl` package; it passes,
   and CI runs it in the lint job and again in the tests job with flwr and torch installed).
 - No `gh` CLI. Workflow: one branch per task, push to the `parineeta` remote
@@ -101,10 +104,10 @@ Qiskit reference | seeding: independent streams from experiment seed/round/clien
 samples under ~100 bits | factory | validation, sweep, theory: exact detection probabilities) |
 evefl/crypto (base, classical, linkkeys: bound HKDF + AEAD + zeroization, keymanager: KeyManager + providers, homomorphic, ckks, zkproof, groth16, circuits/norm_bound.circom) |
 evefl/orchestration/state_machine.py (pure logic; LOCKDOWN threshold guarded >= 0.11) |
-evefl/fl (model, dataset, partition: patient-level train/val/test split, client, strategy, screening, schedule,
-runner, evaluation, server) | evefl/config/settings.yaml | evefl/registry.py | dashboard/ (Streamlit, 4 pages) |
+evefl/fl (model, dataset, imagecache: uint8 cache build/read/verify, partition: patient-level train/val/test split,
+client, strategy, screening, schedule, runner, evaluation, server) | evefl/config/settings.yaml | evefl/registry.py | dashboard/ (Streamlit, 4 pages) |
 scripts/ (smoke_test, run_experiments, audit_partition, qber_sweep, table3_theorem1, validate_backends,
-summarize_run, cache_pretrained_weights) | docs/ (01-06, paper_patches/, validation/, KAGGLE_RUNBOOK.md) | tests/
+summarize_run, cache_pretrained_weights, profile_loading, build_image_cache) | docs/ (01-06, paper_patches/, validation/, KAGGLE_RUNBOOK.md) | tests/
 Only `qber` (a sampled estimate) may drive the controller; `sim_only_*` metadata is simulation ground truth.
 Data split: P0-4 is verified on the real ChestX-ray14 metadata (`docs/validation/partition_audit_real.json`: seed 42, all
 overlaps 0). `partition_meta.json` stores `index_sha256` for every index file (`scripts/audit_partition.py` verifies it) and

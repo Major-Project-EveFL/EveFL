@@ -14,6 +14,42 @@ quotas. Provide a lite profile (data subset, 128 to 160px, 1 to 2 epochs) for sw
 full profile only for the headline scenarios. LOCKDOWN rounds are nearly free because clients
 skip training.
 
+### Projection written 2026-10-11 from the measured lite-run rates (projected, not measured on full data)
+Inputs, measured on a Kaggle T4 in the 5% lite run (`docs/validation/kaggle_profile_2026-10-11.json`, round 2, compute time
+only, fp32, batch 32, 224 px): training 342 images/s, validation 931 images/s, test 922 images/s. The loader is assumed not to
+limit the run (that is what the image cache has to show; the rate is an upper bound until it does).
+Model: 50 rounds; hospitals hold 80% of 112,120 images (89,696 per local epoch), validation 10%, test 10%; validation every
+round; test every 5 rounds (10 times); all three clients train every round; one T4. LOCKDOWN and excluded rounds cost less, so
+attack scenarios are cheaper than this. 128 px assumes compute proportional to pixel count ((224/128)^2 = 3.06): that is an
+assumption, not a measurement. AMP and `channels_last` are not measured yet and are not in this table.
+
+| local epochs | pixels | hours per run, full data | hours per run, 25% of patients |
+|---|---|---|---|
+| 1 | 224 | 3.8 | 1.0 |
+| 2 | 224 | 7.5 | 1.9 |
+| 5 | 224 | 18.4 | 4.6 |
+| 1 | 128 | 1.3 | 0.3 |
+| 2 | 128 | 2.4 | 0.6 |
+| 5 | 128 | 6.0 | 1.5 |
+
+At 224 px and 5 local epochs one full-data run is about 18 h, so about 1.6 runs fit in a 30 h weekly GPU quota (check the
+quota page for the real number). Counting runs: a headline set of 4 methods (B0, B2, B3, B4) x 3 conditions (no attack, Eve on
+all links, Eve on one link) x 3 seeds is 36 runs; a sweep of 3 methods x 11 alpha values x 3 seeds is 99 runs (198 with the
+single-link variant). Totals (arithmetic on the rates above, one T4, projected):
+
+| set | runs | profile | GPU hours |
+|---|---|---|---|
+| headline | 36 | full data, 224 px, E = 5 | 663 |
+| headline | 36 | full data, 224 px, E = 2 | 269 |
+| headline | 36 | full data, 224 px, E = 1 | 138 |
+| headline | 36 | full data, 128 px, E = 2 | 88 |
+| headline | 36 | 25% of patients, 128 px, E = 1 | 11 |
+| sweep | 99 | 25% of patients, 128 px, E = 1 | 31 |
+| sweep + single link | 198 | 25% of patients, 128 px, E = 1 | 62 |
+| sweep + single link | 198 | 25% of patients, 224 px, E = 1 | 190 |
+
+These are replaced by measured values once a run on the cache backend exists.
+
 ## Baselines
 B0 unsecured FedAvg. B1 FedAvg with AEAD only (same accuracy as B0, measure overhead).
 B2 QKDFL-style global binary pause at 11%, reimplemented. B3 EveFL global states.

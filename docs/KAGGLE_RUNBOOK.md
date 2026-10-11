@@ -186,6 +186,122 @@ Do not change `--workers` to values above the CPU count that `nvidia-smi` and th
 - The results JSON now has `experiment.profile` (device, nvidia-smi samples, time per phase, loader wait) and
   `experiment.evaluation`. `summarize_run.py` prints a `device`, `evaluation` and `profile` line; paste them.
 
+## Image cache: a minimal CPU notebook that builds and verifies it
+Why: image loading was the bottleneck (docs/validation/kaggle_profile_2026-10-11.json). The cache is built once, saved as a
+private dataset, and attached to every later run. Acceptance is pre-registered in docs/06.
+
+Make a NEW notebook for this. Settings: **Accelerator: None** (the build is CPU-only; this saves GPU quota), Internet **on**,
+attach the `nih-chest-xrays` dataset, enable the `GITHUB_TOKEN` secret for this notebook (secrets are per notebook).
+Run it with **Save & Run All**; it does not need your attention while it runs. Session limit: Kaggle documents 12 hours for
+a CPU or GPU notebook session; the build is projected at about 25 to 40 minutes in total (projected, not measured: see the
+trial cell). If the session dies the work in `/kaggle/working` is lost unless the version was saved, and a rebuild costs the
+full build time again.
+
+**Cell 1. Clone and install** (the clone goes to `/kaggle/temp`, so it is not saved into the dataset):
+```python
+import base64, os, subprocess
+from kaggle_secrets import UserSecretsClient
+
+REPO = "https://github.com/Parineeta-2307/EveFL_Federated_Learning.git"
+os.makedirs("/kaggle/temp", exist_ok=True)
+DEST = "/kaggle/temp/EveFL"
+
+token = UserSecretsClient().get_secret("GITHUB_TOKEN")  # never printed
+basic = base64.b64encode(f"x-access-token:{token}".encode()).decode()
+env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_CONFIG_COUNT": "1",
+       "GIT_CONFIG_KEY_0": "http.extraheader", "GIT_CONFIG_VALUE_0": f"AUTHORIZATION: basic {basic}"}
+
+def git(*args):
+    r = subprocess.run(["git", *args], env=env, capture_output=True, text=True)
+    text = (r.stdout + r.stderr).replace(token, "***").replace(basic, "***")
+    if r.returncode:
+        raise RuntimeError(f"git {args[0]} failed:\n{text}")
+    return text.strip()
+
+if os.path.isdir(f"{DEST}/.git"):
+    git("-C", DEST, "pull", "--ff-only")
+else:
+    git("clone", REPO, DEST)
+print(git("-C", DEST, "log", "--oneline", "-1"))
+del token, basic, env
+
+%cd /kaggle/temp/EveFL
+!pip install -q --no-deps -r requirements-kaggle.txt
+!pip install -q --no-deps -e .
+
+import sys
+sys.path.insert(0, "/kaggle/temp/EveFL")
+import torch, torchvision, numpy, PIL
+print("python", sys.version.split()[0], "| torch", torch.__version__, "| torchvision", torchvision.__version__,
+      "| numpy", numpy.__version__, "| Pillow", PIL.__version__, "| cpu_count", os.cpu_count())
+import evefl.fl.imagecache
+print("import evefl.fl.imagecache: OK")
+```
+The printed commit must include the merge of `feat/image-cache`. `cpu_count` should be 4; if it is not, the 4-process
+estimate does not hold.
+
+**Optional trial cell** (about 6 minutes; run it in your normal notebook, before the full build): it builds 2000 images and
+checks 200 against the PNG pipeline, and prints a labelled projection of the full build from the measured rate.
+```python
+%cd /kaggle/temp/EveFL
+DATA = "/kaggle/input/datasets/nih-chest-xrays/data"
+!python scripts/build_image_cache.py --data-root {DATA} --output /kaggle/temp/cache_trial --workers 4 \
+    --limit 2000 --verify-sample 200
+```
+
+**Cell B. Build** (resumable: running it again only does missing shards; it finishes every shard even if an image fails,
+then exits non-zero and lists the failures in `failures.json`; it never skips or replaces an image silently):
+```python
+%cd /kaggle/temp/EveFL
+DATA = "/kaggle/input/datasets/nih-chest-xrays/data"
+OUT = "/kaggle/working/evefl_cache_u8_256"
+!python scripts/build_image_cache.py --data-root {DATA} --output {OUT} --workers 4
+```
+
+**Cell C. Verify** (re-hashes every shard and compares 1000 random images plus every non-grey-mode image with the PNG
+pipeline; this is acceptance items 2 and 3):
+```python
+%cd /kaggle/temp/EveFL
+DATA = "/kaggle/input/datasets/nih-chest-xrays/data"
+OUT = "/kaggle/working/evefl_cache_u8_256"
+!python scripts/build_image_cache.py --data-root {DATA} --verify {OUT} --verify-sample 1000
+```
+
+**Cell D. Report** (paste this back, with the output of B and C):
+```python
+import json, pathlib
+p = pathlib.Path("/kaggle/working/evefl_cache_u8_256")
+meta = json.load(open(p / "meta.json"))
+print(json.dumps({k: v for k, v in meta.items() if k != "non_l_rows_listed"}, indent=2))
+print("failures:", json.load(open(p / "failures.json"))["n_failures"])
+!du -sh {p}
+```
+
+**Save it as a private dataset** (in the Kaggle UI, no token needed): when the run has finished, open the saved version, go to
+the **Output** tab, choose **New Dataset**, name it `evefl-cache-u8-256`, set visibility **Private**. It is about 7.35 GB.
+In later notebooks attach it, then find its real path (do not guess it):
+```python
+!find /kaggle/input -name index.json
+```
+
+**Use it** (GPU notebook; same lite run as the profile run, with the cache attached; cell 6 then prints the data wait share,
+including the "from round 2" figure that the acceptance rule reads):
+```python
+%cd /kaggle/working/EveFL
+DATA = "/kaggle/input/datasets/nih-chest-xrays/data"
+WEIGHTS = "/kaggle/input/datasets/parineetarana1/evefl-resnet18-weights/resnet18_imagenet.pth"
+CACHE = "/kaggle/input/datasets/parineetarana1/evefl-cache-u8-256"   # replace with the folder `find` printed
+!python -m evefl.fl.server \
+    --data-root {DATA} --partition-root /kaggle/working/partitions_lite \
+    --num-rounds 5 --local-epochs 1 --batch-size 32 --seed 0 \
+    --intercept-probability 0.0 --qubits 1024 --sample-fraction 0.25 \
+    --pretrained --pretrained-weights {WEIGHTS} \
+    --image-backend uint8_cache --image-cache-root {CACHE} \
+    --experiment-name lite_alpha0_seed0_cache --output /kaggle/working/results/lite_alpha0_seed0_cache.json
+```
+Reading it: the first epoch over a freshly attached dataset reads the shards from disk (cold page cache), so round 1 is
+slower; the acceptance rule reads the data-wait share from round 2 onward, and the round 1 figure is reported next to it.
+
 ## What I will check when you paste
 - cell 1 printed a commit line, `flwr 1.13.0` and the import line, with no traceback and no token anywhere in the output,
 - cell 2 printed `OK`,

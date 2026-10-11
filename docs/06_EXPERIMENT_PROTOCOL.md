@@ -213,3 +213,27 @@ The threshold 0.5 is fixed now and not tuned on the profile.
 
 Settings recorded with every run: `experiment.evaluation` (`federated_evaluate`, `test_eval_every`, `val_eval_every`). Validation
 alone drives selection; the test split is evaluated every `test_eval_every` rounds and on the final round, and the paper says so.
+
+## Pre-registered: aggregate-norm check for secure aggregation (ADR 0003, amendment 5)
+Written 2026-10-10, before any secure-aggregation run exists and before any plaintext run has logged the statistic. These
+values are fixed here; they are not tuned on results.
+
+1. **Statistic.** `a_t = ||Delta_t||_2 / m_t`. `Delta_t` is the aggregated update over the floating-point tensors (the definition
+   of `update_delta_norm`: integer BatchNorm counters excluded). `m_t = sum_{i in S} w_hat_i * lr_{i,t} / lr_base`, the weighted
+   mean learning-rate multiplier the server sent in round t (cosine schedule and the CAUTION factor), with `w_hat_i` the
+   registry weights renormalised over S.
+2. **Window.** The last `W = 5` accepted rounds with the same participant set S. Fewer than 3 such rounds: the check does not
+   fire (warm-up). Discarded rounds do not enter the window. A change of S starts a new window.
+3. **Rule.** Discard the round (reason `aggregate_norm`) if
+   `a_t > median(window) + k_agg * max(1.4826 * MAD(window), rel_floor * median(window))`, with `k_agg = 3` and
+   `rel_floor = 0.25`. These are the form and constants of the P0-2 screening rule, applied over time instead of over clients.
+4. **Honest-run measurement before use.** Plaintext runs log `a_t` and the rule is applied to the logged trace without acting
+   on it. The rule is declared unfit for use in secure mode if it would have discarded more than 5% of honest rounds (pooled
+   over the runs of the baselines). It is then reported as unfit and is **not** retuned in this protocol; a new rule would
+   need a new pre-registration with its own date.
+5. **Reported.** Number of discarded rounds and their reasons, the `a_t` trace, the warm-up rounds that were unchecked, and,
+   for every attack scenario, whether the attack was caught or passed (the limits are in ADR 0003: stealthy, cancelling and
+   just-under-threshold updates are not caught).
+6. **Linearity caveat.** The normalisation assumes the update scales roughly linearly with the learning rate. FedProx in CAUTION
+   and the optimiser make that approximate; the honest-run measurement in item 4 is what tells whether it is good enough.
+7. **Deviations** from this rule are listed in this file with the reason and the date, as for the sweeps above.

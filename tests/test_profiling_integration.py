@@ -19,7 +19,7 @@ from evefl.fl.client import _evaluate_one_client, _train_one_client, create_clie
 from evefl.fl.evaluation import evaluate_global_model, make_evaluate_fn
 from evefl.fl.model import NUM_CLASSES, build_resnet18
 from evefl.fl.runner import build_local_client_proxies, run_sequential_fl
-from evefl.fl.server import _build_arg_parser, build_experiment_log
+from evefl.fl.server import _build_arg_parser, build_experiment_log, run_experiment
 from evefl.fl.strategy import EveFLStrategy
 from evefl.profiling import LoaderMeter
 from evefl.quantum.base import QKDResult
@@ -186,3 +186,32 @@ def test_results_json_records_profile_and_evaluation_settings_outside_the_hash()
     assert profiled["evaluation"] == {"federated_evaluate": False, "test_eval_every": 5, "val_eval_every": 1}
     assert plain["config_hash"] == profiled["config_hash"]
     assert "profile" not in plain and "evaluation" not in plain
+
+
+# --------------------------------------------------------------------------
+# The whole path: run_experiment writes the blocks the profile run depends on
+# --------------------------------------------------------------------------
+
+def test_run_experiment_writes_profile_evaluation_and_per_round_timing(synthetic_data, tmp_path):
+    data_root, partition_root = synthetic_data
+    out = tmp_path / "results.json"
+    run_experiment(
+        data_root=data_root, partition_root=partition_root, num_clients=3, num_rounds=2, local_epochs=1,
+        batch_size=4, n_qubits=1024, intercept_probability=0.0, seed=0, experiment_name="profile_e2e",
+        output_path=out, pretrained=False, test_eval_every=2,
+    )
+    report = json.loads(out.read_text())
+    exp = report["experiment"]
+    assert exp["evaluation"] == {
+        "federated_evaluate": False, "test_eval_every": 2, "val_eval_every": 1,
+        "final_round_always_evaluated": True, "selection_uses": "validation split only"}
+    profile = exp["profile"]
+    assert {"device", "dataloader", "gpu", "gpu_by_phase", "instrumentation", "summary"} <= set(profile)
+    assert profile["dataloader"]["num_workers"] == 0 and profile["dataloader"]["batch_size"] == 4
+    assert profile["summary"]["n_rounds_with_timing"] == 2
+    assert profile["summary"]["rule_50_percent"]["threshold"] == 0.5
+    rounds = report["rounds"]
+    # test split: round 2 only (every 2 rounds and the final one); validation: every round; no federated evaluation
+    assert [("server_eval" in r, "val_eval" in r, "federated_eval" in r) for r in rounds] == [
+        (False, True, False), (True, True, False)]
+    assert all("timing" in r and r["timing"]["round_s"] > 0 for r in rounds)

@@ -1,0 +1,53 @@
+{
+  "label": "measured on Kaggle (CPU-only notebook, accelerator None), transcribed from the notebook log pasted by the team; NOT a CI environment. Counts, hashes and timings only.",
+  "recorded_in_repo_on": "2026-10-12",
+  "defined_in": "docs/06_EXPERIMENT_PROTOCOL.md, 'Pre-registered: acceptance of the uint8 image cache' (written 2026-10-11, before this build)",
+  "caveats": [
+    "The pixel check and the shard re-hash ran in the same notebook session that built the cache. They show that the cache reproduces the PNG pipeline and that every shard reproduces index.json; they do not show that the saved Kaggle dataset is intact after upload. Run --verify on the attached dataset (acceptance item 3 again) before relying on it.",
+    "Acceptance items 4 and 5 (data-wait share on the cache backend from round 2 onward, and the side-by-side lite run) need a GPU run and are not part of this record.",
+    "The trial's single shard of 2000 images ran in one worker process, so its 26.6 images/s is a one-process rate, not a four-process rate; its printed projection (70 min) does not describe the full build.",
+    "Folder scan time varied between sessions (290 s in the 2026-10-11 profile run, 124.7 s in the trial, 60.4 s in the full build); it is a property of the Kaggle file system at the time, not of the build code."
+  ],
+  "environment": {
+    "python": "3.13.15", "platform": "Linux-6.18.48+-x86_64-with-glibc2.39", "cpu_count": 4, "accelerator": "None",
+    "numpy": "2.1.3", "Pillow": "12.3.0", "torch": "2.11.0+cpu", "torchvision": "0.26.0+cpu"
+  },
+  "code_commit": "277ee46 (main, as printed by the clone cell and recorded in meta.json)",
+  "metadata_csv_sha256": "88f75094e25ccc0c6f1f9cdfd4b2f94f9379a0ae07d5ff4dcf94242707b07462",
+  "trial": {
+    "command": "python scripts/build_image_cache.py --data-root <nih> --output /kaggle/temp/cache_trial --workers 4 --limit 2000 --verify-sample 200",
+    "n_images": 2000, "n_shards": 1, "failures": 0,
+    "source_png_modes": {"L": 1968, "RGBA": 32},
+    "path_scan_seconds": 124.7, "build_seconds": 75.0, "images_per_s": 26.6,
+    "pixel_check": {"rows_compared": 230, "rows_with_non_l_source": 32, "stored_array_mismatches": 0, "eval_pipeline_mismatches": 0},
+    "cache_sha256": "d839720d5170ad06b5945f6e5cd3ec69b5fa2c81807d834183aac5f6fb090d3e",
+    "note": "trial of the first 2000 metadata rows; not the cache used for runs"
+  },
+  "full_build": {
+    "command": "python scripts/build_image_cache.py --data-root <nih> --output /kaggle/working/evefl_cache_u8_256 --workers 4",
+    "n_images": 112120, "shard_size": 4096, "n_shards": 28, "failures": 0,
+    "source_png_modes": {"L": 111601, "RGBA": 519},
+    "rows_with_non_l_source": 519,
+    "path_scan_seconds": 60.4, "build_seconds": 1337.4, "images_per_s": 83.8,
+    "folder_bytes_decimal_gb": 7.36,
+    "cache_sha256": "db497ea60fdc0f336ac94c3ff8d935bf755ddcb61ea567fa38fb3a01806a456f",
+    "notebook_wall_seconds_all_cells": 1870.1
+  },
+  "verification": {
+    "command": "python scripts/build_image_cache.py --data-root <nih> --verify /kaggle/working/evefl_cache_u8_256 --verify-sample 1000",
+    "shard_hash_mismatches": 0,
+    "pixel_check": {
+      "seed": 0, "random_rows_requested": 1000, "non_l_rows_included": 519, "rows_compared": 1517,
+      "stored_array_mismatches": 0, "eval_pipeline_mismatches": 0
+    },
+    "cache_sha256": "db497ea60fdc0f336ac94c3ff8d935bf755ddcb61ea567fa38fb3a01806a456f"
+  },
+  "acceptance_against_docs_06": {
+    "1_zero_failures": true,
+    "2_pixel_equality_on_sample_and_all_non_l": true,
+    "3_shard_hashes_reproduce_index": true,
+    "4_data_wait_share_from_round_2_below_0_5": "not yet measured (needs the lite run on the cache backend on a GPU)",
+    "5_side_by_side_lite_metrics": "not yet measured (report only)"
+  },
+  "reading": "The cache is complete (28 shards, 112,120 images, no failures). 519 source files are RGBA (0.46%); every one has equal R, G and B and passes the pixel check. The measured build took 22.3 minutes for the images at 83.8 images/s on 4 processes, inside the 15 to 25 minute projection."
+}

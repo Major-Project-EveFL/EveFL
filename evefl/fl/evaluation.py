@@ -21,8 +21,8 @@ import torch
 import torch.nn as nn
 
 from evefl.fl.client import set_model_parameters
-from evefl.fl.dataset import get_test_dataloader
-from evefl.fl.model import CHESTXRAY_LABELS, build_resnet18, get_device
+from evefl.fl.dataset import ImageBackend, get_test_dataloader
+from evefl.fl.model import CHESTXRAY_LABELS, build_resnet18, get_device, prepare_batch
 from evefl.profiling import LoaderMeter, begin_phase, end_phase, timed_iter
 
 log = logging.getLogger(__name__)
@@ -90,6 +90,7 @@ def evaluate_global_model(
     batch_size: int = 64,
     device: Optional[torch.device] = None,
     split: str = "test",
+    image_backend: Optional[ImageBackend] = None,
 ) -> Tuple[float, Dict[str, Any]]:
     """
     Load `ndarrays` into a fresh ResNet-18 and evaluate against the
@@ -115,7 +116,8 @@ def evaluate_global_model(
     model.eval()
 
     criterion = nn.BCEWithLogitsLoss()
-    loader = get_test_dataloader(data_root, partition_root, batch_size=batch_size, split=split)
+    loader = get_test_dataloader(data_root, partition_root, batch_size=batch_size, split=split,
+                                 image_backend=image_backend)
 
     setup_s = time.perf_counter() - setup_started  # model build + dataset construction (CSV parse, labels)
     meter = LoaderMeter()
@@ -124,7 +126,7 @@ def evaluate_global_model(
     all_targets, all_probs = [], []
 
     for images, targets in timed_iter(loader, meter):
-        images = images.to(device, non_blocking=True)
+        images = prepare_batch(images, device, non_blocking=True)
         targets = targets.to(device, non_blocking=True)
 
         logits = model(images)
@@ -188,6 +190,7 @@ def make_evaluate_fn(
     every_n_rounds: int = 1,
     num_rounds: Optional[int] = None,
     split: str = "test",
+    image_backend: Optional[ImageBackend] = None,
 ):
     """
     Build the `evaluate_fn` EveFLStrategy expects.
@@ -214,6 +217,7 @@ def make_evaluate_fn(
             batch_size=batch_size,
             device=device,
             split=split,
+            image_backend=image_backend,
         )
 
     return evaluate_fn

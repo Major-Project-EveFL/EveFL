@@ -120,5 +120,27 @@ def get_eval_transform() -> transforms.Compose:
     ])
 
 
+def prepare_batch(images: torch.Tensor, device: torch.device, *, non_blocking: bool = False) -> torch.Tensor:
+    """
+    Move a batch of images to `device` and make it a normalised float32 [B, 3, H, W] model input.
+
+    - A float batch (the PNG backend: already `ToTensor` + `Normalize` in the loader) is only moved, so that path is unchanged.
+    - A uint8 batch [B, 1, H, W] (the uint8 cache backend) is converted on the device: `/ 255` (what `ToTensor` does), the one
+      channel is expanded to three (what `convert("RGB")` did before the resize) and `(x - mean) / std` is applied with the
+      same ImageNet constants as `Normalize`. On the CPU this is bit-identical to the PNG pipeline (tests/test_image_cache.py);
+      on a GPU the float operations can differ in the last bit.
+    The DataLoader workers only ever produce CPU uint8 tensors; nothing in them touches CUDA.
+    """
+    images = images.to(device, non_blocking=non_blocking)
+    if images.dtype != torch.uint8:
+        return images
+    x = images.to(torch.float32).div(255.0)
+    if x.shape[1] == 1:
+        x = x.expand(-1, 3, -1, -1)
+    mean = torch.tensor(IMAGENET_MEAN, dtype=torch.float32, device=device).view(1, 3, 1, 1)
+    std = torch.tensor(IMAGENET_STD, dtype=torch.float32, device=device).view(1, 3, 1, 1)
+    return (x - mean) / std
+
+
 def get_device() -> torch.device:
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")

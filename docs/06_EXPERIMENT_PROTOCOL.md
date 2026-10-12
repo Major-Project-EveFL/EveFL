@@ -14,6 +14,42 @@ quotas. Provide a lite profile (data subset, 128 to 160px, 1 to 2 epochs) for sw
 full profile only for the headline scenarios. LOCKDOWN rounds are nearly free because clients
 skip training.
 
+### Projection written 2026-10-11 from the measured lite-run rates (projected, not measured on full data)
+Inputs, measured on a Kaggle T4 in the 5% lite run (`docs/validation/kaggle_profile_2026-10-11.json`, round 2, compute time
+only, fp32, batch 32, 224 px): training 342 images/s, validation 931 images/s, test 922 images/s. The loader is assumed not to
+limit the run (that is what the image cache has to show; the rate is an upper bound until it does).
+Model: 50 rounds; hospitals hold 80% of 112,120 images (89,696 per local epoch), validation 10%, test 10%; validation every
+round; test every 5 rounds (10 times); all three clients train every round; one T4. LOCKDOWN and excluded rounds cost less, so
+attack scenarios are cheaper than this. 128 px assumes compute proportional to pixel count ((224/128)^2 = 3.06): that is an
+assumption, not a measurement. AMP and `channels_last` are not measured yet and are not in this table.
+
+| local epochs | pixels | hours per run, full data | hours per run, 25% of patients |
+|---|---|---|---|
+| 1 | 224 | 3.8 | 1.0 |
+| 2 | 224 | 7.5 | 1.9 |
+| 5 | 224 | 18.4 | 4.6 |
+| 1 | 128 | 1.3 | 0.3 |
+| 2 | 128 | 2.4 | 0.6 |
+| 5 | 128 | 6.0 | 1.5 |
+
+At 224 px and 5 local epochs one full-data run is about 18 h, so about 1.6 runs fit in a 30 h weekly GPU quota (check the
+quota page for the real number). Counting runs: a headline set of 4 methods (B0, B2, B3, B4) x 3 conditions (no attack, Eve on
+all links, Eve on one link) x 3 seeds is 36 runs; a sweep of 3 methods x 11 alpha values x 3 seeds is 99 runs (198 with the
+single-link variant). Totals (arithmetic on the rates above, one T4, projected):
+
+| set | runs | profile | GPU hours |
+|---|---|---|---|
+| headline | 36 | full data, 224 px, E = 5 | 663 |
+| headline | 36 | full data, 224 px, E = 2 | 269 |
+| headline | 36 | full data, 224 px, E = 1 | 138 |
+| headline | 36 | full data, 128 px, E = 2 | 88 |
+| headline | 36 | 25% of patients, 128 px, E = 1 | 11 |
+| sweep | 99 | 25% of patients, 128 px, E = 1 | 31 |
+| sweep + single link | 198 | 25% of patients, 128 px, E = 1 | 62 |
+| sweep + single link | 198 | 25% of patients, 224 px, E = 1 | 190 |
+
+These are replaced by measured values once a run on the cache backend exists.
+
 ## Baselines
 B0 unsecured FedAvg. B1 FedAvg with AEAD only (same accuracy as B0, measure overhead).
 B2 QKDFL-style global binary pause at 11%, reimplemented. B3 EveFL global states.
@@ -237,3 +273,48 @@ values are fixed here; they are not tuned on results.
 6. **Linearity caveat.** The normalisation assumes the update scales roughly linearly with the learning rate. FedProx in CAUTION
    and the optimiser make that approximate; the honest-run measurement in item 4 is what tells whether it is good enough.
 7. **Deviations** from this rule are listed in this file with the reason and the date, as for the sweeps above.
+
+## Pre-registered: acceptance of the uint8 image cache (before any cache is built)
+Written 2026-10-11, after the profile of the 5% lite run (`docs/validation/kaggle_profile_2026-10-11.json`: data wait 92% of
+the loaded phases, so the pre-registered loading rule above holds) and before any cache exists. The cache is an optional
+backend (`--image-backend uint8_cache`); the PNG backend stays the default and the reference.
+
+**What the cache is.** For every row of `Data_Entry_2017.csv`, in row order: `torchvision.transforms.Resize(256)` applied to
+`Image.open(path).convert("RGB")` (the call the PNG pipeline makes), reduced to one `uint8` channel after checking that the
+three channels are equal. It is stored in shards of 4096 images. At load time the channel is expanded to three on the device
+and normalised there with the ImageNet mean and std; evaluation crops the centre 224 x 224, training crops a random 224 x 224
+and flips with the same torch RNG calls, in the same order, as `RandomCrop` and `RandomHorizontalFlip`.
+
+**Build rules.**
+1. Every shard is attempted. An image that cannot be read, is not 256 x 256 after the resize, or whose three channels differ is
+   written to `failures.json` (row, name, reason) and counted; the build then exits non-zero and writes no `index.json`.
+   There is no silent fallback to the PNG file. If any image is to be left out of an experiment, the exclusion is decided
+   after the list is seen, applies identically to both backends, and is recorded in the results JSON.
+2. The meta file records Python, NumPy, Pillow and torchvision versions, the SHA-256 of the metadata CSV, the number of source
+   images per PNG mode, the build command and the build seconds. `cache_sha256` is the SHA-256 of `index.json`, which holds
+   the SHA-256 of every shard and of the ordered image names.
+3. Pillow and torchvision versions are part of the cache's identity: a different resampling implementation could differ by one
+   grey level, so the pixel check is repeated on any machine that builds a cache.
+
+**Acceptance (all must hold; nothing is tuned on the outcome).**
+1. Zero build failures, or every failure listed in `failures.json` and the decision about it recorded here with its date.
+2. Pixel equality: on a verification sample of 1000 randomly drawn rows (seed 0) plus every row whose source mode is not `L`
+   (a seed-0 sample of 1000 of them if there are more), the evaluation pipeline output of the cache backend is bit-identical
+   (`torch.equal`) to the PNG backend's, and the stored array equals channel 0 of `Resize(256)(img.convert("RGB"))`. Any
+   mismatch fails the cache.
+3. Re-reading every shard reproduces the SHA-256 values in `index.json`.
+4. In the lite alpha = 0 run on the cache backend, the data-wait share of the loaded phases is below 0.5. It is read from
+   round 2 onward (`experiment.profile.summary.data_wait_share_loaded_from_round_2`), because round 1 includes the one-time
+   path index and cold reads of the attached dataset (the page cache is empty for the first pass over the shards). The
+   round 1 share is reported next to it. If the share is 0.5 or more, the result is reported and diagnosed here; the
+   threshold is not changed.
+5. The lite run's per-round validation and test metrics on the two backends (same seed, same partition) are reported side by
+   side and are not a pass or fail test: GPU run-to-run variation has not been measured, and the pixel equality in item 2 is
+   the proof that the model input is unchanged.
+
+**Reported with the cache.** Build seconds and images per second, `cache_sha256`, on-disk bytes, the PNG mode counts, the
+verification sample size and result, and the per-phase timing of the lite run on both backends. Every results JSON records
+`experiment.data_backend` (name, and for the cache its `cache_sha256` and versions). The backend enters `config_hash` only when
+it is not the PNG default, so every earlier hash stays valid.
+
+**Deviations** from this rule are listed in this file with the reason and the date, as for the sweeps above.

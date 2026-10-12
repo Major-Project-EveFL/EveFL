@@ -53,6 +53,13 @@ def _evaluation_line(evaluation: Dict[str, Any] | None) -> str:
             f"val_every={evaluation.get('val_eval_every')}")
 
 
+def _backend_line(backend: Dict[str, Any] | None) -> str:
+    if not backend:
+        return "n/a (results predate the image backend field: png)"
+    sha = backend.get("cache_sha256")
+    return f"{backend.get('name')}" + (f"  cache_sha256 {sha[:16]}..." if sha else "")
+
+
 def _device_line(profile: Dict[str, Any] | None) -> str:
     device = (profile or {}).get("device")
     if not device:
@@ -75,6 +82,9 @@ def _profile_line(profile: Dict[str, Any] | None) -> str:
     if share is not None:
         parts.append(f"data wait {share * 100:.0f}% of the loaded phases (exceeds {rule.get('threshold', 0.5) * 100:.0f}%: "
                      f"{rule.get('data_wait_exceeds_threshold')})")
+    share_r2 = summary.get("data_wait_share_loaded_from_round_2")
+    if share_r2 is not None:
+        parts.append(f"from round 2: {share_r2 * 100:.0f}%")
     rates = summary.get("images_per_s") or {}
     if rates:
         parts.append("images/s " + ", ".join(f"{k} {v:.1f}" for k, v in rates.items()))
@@ -112,6 +122,7 @@ def summarize(report: Dict[str, Any]) -> List[str]:
         f"local_epochs={exp['local_epochs']}  batch={exp['batch_size']}",
         f"pretrained      : {exp.get('pretrained')}  weights={exp.get('init_weights', {}).get('source')}",
         f"environment     : {_environment_line(exp.get('environment'))}",
+        f"data backend    : {_backend_line(exp.get('data_backend'))}",
         f"device          : {_device_line(exp.get('profile'))}",
         f"evaluation      : {_evaluation_line(exp.get('evaluation'))}",
         f"profile         : {_profile_line(exp.get('profile'))}",

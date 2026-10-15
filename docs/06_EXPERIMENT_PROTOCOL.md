@@ -318,3 +318,16 @@ verification sample size and result, and the per-phase timing of the lite run on
 it is not the PNG default, so every earlier hash stays valid.
 
 **Deviations** from this rule are listed in this file with the reason and the date, as for the sweeps above.
+
+### Outcome of the image-cache acceptance (recorded 2026-10-15)
+Items 1 to 4 hold; item 5 is report-only. Evidence: `docs/validation/image_cache_build_2026-10-12.json` (items 1 to 3: 112,120
+images, 0 failures, 1,517 rows compared, 0 mismatches, every shard re-hashed) and `docs/validation/image_cache_lite_run_2026-10-15.json`
+(item 4 and the side-by-side). On the cache backend the data-wait share of the loaded phases was 0.048 from round 2 onward
+(0.054 over all rounds), against 0.92 on the PNG backend; the 5-round lite run took 78 s against 936 s (measured, different
+sessions). The attached dataset was re-verified (cache_sha256 unchanged).
+
+Item 5, reported not judged: the two lite runs are not identical. Largest per-round differences, cache minus png: validation
+loss 0.003, test loss 0.004, validation macro AUC over non-thin classes 0.022, test 0.024. The model input is proved equal by
+item 2, and on the CPU the backends agree to 1e-5; the difference on the GPU is therefore not attributed. It is compared with
+the run-to-run variation of one backend before any claim is made. Runs that are compared with each other must use the same
+backend.

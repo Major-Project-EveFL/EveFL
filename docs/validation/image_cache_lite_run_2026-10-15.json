@@ -1,0 +1,257 @@
+{
+  "label": "measured on Kaggle, 2 x Tesla T4, GPU notebook; the uint8_cache run is transcribed from the notebook log pasted by the team, the png run is extracted by script from results/kaggle/lite_alpha0_seed0_profile.json.",
+  "recorded_in_repo_on": "2026-10-15",
+  "defined_in": "docs/06_EXPERIMENT_PROTOCOL.md, 'Pre-registered: acceptance of the uint8 image cache', items 4 and 5",
+  "supersedes": "items 4 and 5 of docs/validation/image_cache_build_2026-10-12.json ('not yet measured')",
+  "caveats": [
+    "Pipeline check on a 5% patient subset: 3 clients, 5 rounds, 1 local epoch, batch 32, pretrained ResNet-18, seed 0. Neither run is a baseline; no AUC or loss in this file may be quoted as a result in the paper.",
+    "Item 5 of the rule is report-only. The two runs are NOT identical (differences below). GPU run-to-run variation of one backend has not been measured, so the differences are not attributed to the backend or to GPU non-determinism. On the CPU the two backends agree to 1e-5 in the CI end-to-end test.",
+    "The AUC values include thin classes only through val/test macro 'excl_thin'; classes with 1 to 7 positives swing the plain macro AUC by several hundredths between any two runs.",
+    "The png run was in the 2026-10-11 session, the cache run in the 2026-10-15 session (different machines and times).",
+    "Cache-run timings are transcribed at the one decimal printed; the data-wait shares quoted are the exact values the run's own summary printed."
+  ],
+  "runs": {
+    "png": {
+      "config_hash": "778194da04f2ec74",
+      "data_backend": {
+        "name": "png",
+        "cache_sha256": null
+      },
+      "code_commit": "4901581",
+      "elapsed_seconds": 936.4,
+      "data_wait_share_all_rounds": 0.9164,
+      "gpu0_mean_util_pct_all_samples": 7
+    },
+    "uint8_cache": {
+      "config_hash": "a7f3ef57621f8836",
+      "data_backend": {
+        "name": "uint8_cache",
+        "cache_sha256": "db497ea60fdc0f336ac94c3ff8d935bf755ddcb61ea567fa38fb3a01806a456f"
+      },
+      "code_commit": "3b736c1",
+      "elapsed_seconds": 78.4,
+      "data_wait_share_all_rounds": 0.0535,
+      "data_wait_share_from_round_2": 0.0484,
+      "gpu0_mean_util_pct_all_samples": 80,
+      "gpu0_mean_util_pct_round2_fit": 93.9
+    }
+  },
+  "environment": {
+    "python": "3.13.15",
+    "torch": "2.11.0+cu128",
+    "torchvision": "0.26.0+cu128",
+    "numpy": "2.1.3",
+    "Pillow": "12.3.0",
+    "device": "cuda: 2 x Tesla T4 (14912 MiB), only GPU 0 used"
+  },
+  "partition": {
+    "subset_fraction": 0.05,
+    "seed": 42,
+    "hospital_images": [
+      1095,
+      1232,
+      1975
+    ],
+    "test_images": 664,
+    "val_images": 512,
+    "index_hashes_match_partition_meta": true
+  },
+  "rounds": [
+    {
+      "round": 1,
+      "png": {
+        "fit": {
+          "phase_s": 356.3,
+          "data_wait_s": 341.4,
+          "compute_s": 13.4
+        },
+        "server_eval_test_phase_s": 20.0,
+        "server_eval_val_phase_s": 15.6,
+        "val_loss": 0.2003,
+        "val_auc_excl_thin": 0.6277,
+        "test_loss": 0.2011,
+        "test_auc_excl_thin": 0.5606
+      },
+      "uint8_cache": {
+        "fit": {
+          "phase_s": 15.7,
+          "data_wait_s": 0.9,
+          "compute_s": 13.2
+        },
+        "server_eval_test_phase_s": 1.3,
+        "server_eval_val_phase_s": 1.0,
+        "val_loss": 0.2012,
+        "val_auc_excl_thin": 0.6494,
+        "test_loss": 0.2025,
+        "test_auc_excl_thin": 0.5746
+      },
+      "difference_cache_minus_png": {
+        "val_loss": 0.0009,
+        "val_auc_excl_thin": 0.0217,
+        "test_loss": 0.0014,
+        "test_auc_excl_thin": 0.014
+      }
+    },
+    {
+      "round": 2,
+      "png": {
+        "fit": {
+          "phase_s": 108.0,
+          "data_wait_s": 95.1,
+          "compute_s": 12.4
+        },
+        "server_eval_test_phase_s": 15.8,
+        "server_eval_val_phase_s": 12.3,
+        "val_loss": 0.1951,
+        "val_auc_excl_thin": 0.6055,
+        "test_loss": 0.1961,
+        "test_auc_excl_thin": 0.6179
+      },
+      "uint8_cache": {
+        "fit": {
+          "phase_s": 12.7,
+          "data_wait_s": 0.4,
+          "compute_s": 11.9
+        },
+        "server_eval_test_phase_s": 1.1,
+        "server_eval_val_phase_s": 0.9,
+        "val_loss": 0.1949,
+        "val_auc_excl_thin": 0.6199,
+        "test_loss": 0.1963,
+        "test_auc_excl_thin": 0.6418
+      },
+      "difference_cache_minus_png": {
+        "val_loss": -0.0002,
+        "val_auc_excl_thin": 0.0144,
+        "test_loss": 0.0002,
+        "test_auc_excl_thin": 0.0239
+      }
+    },
+    {
+      "round": 3,
+      "png": {
+        "fit": {
+          "phase_s": 108.0,
+          "data_wait_s": 94.8,
+          "compute_s": 12.7
+        },
+        "server_eval_test_phase_s": 15.8,
+        "server_eval_val_phase_s": 12.2,
+        "val_loss": 0.1829,
+        "val_auc_excl_thin": 0.7142,
+        "test_loss": 0.1881,
+        "test_auc_excl_thin": 0.6691
+      },
+      "uint8_cache": {
+        "fit": {
+          "phase_s": 12.9,
+          "data_wait_s": 0.4,
+          "compute_s": 12.0
+        },
+        "server_eval_test_phase_s": 1.1,
+        "server_eval_val_phase_s": 0.9,
+        "val_loss": 0.1858,
+        "val_auc_excl_thin": 0.6986,
+        "test_loss": 0.1924,
+        "test_auc_excl_thin": 0.652
+      },
+      "difference_cache_minus_png": {
+        "val_loss": 0.0029,
+        "val_auc_excl_thin": -0.0156,
+        "test_loss": 0.0043,
+        "test_auc_excl_thin": -0.0171
+      }
+    },
+    {
+      "round": 4,
+      "png": {
+        "fit": {
+          "phase_s": 107.4,
+          "data_wait_s": 94.1,
+          "compute_s": 12.9
+        },
+        "server_eval_test_phase_s": 15.8,
+        "server_eval_val_phase_s": 12.5,
+        "val_loss": 0.1812,
+        "val_auc_excl_thin": 0.7295,
+        "test_loss": 0.1861,
+        "test_auc_excl_thin": 0.6781
+      },
+      "uint8_cache": {
+        "fit": {
+          "phase_s": 13.1,
+          "data_wait_s": 0.4,
+          "compute_s": 12.2
+        },
+        "server_eval_test_phase_s": 1.2,
+        "server_eval_val_phase_s": 0.9,
+        "val_loss": 0.1801,
+        "val_auc_excl_thin": 0.7282,
+        "test_loss": 0.1859,
+        "test_auc_excl_thin": 0.6826
+      },
+      "difference_cache_minus_png": {
+        "val_loss": -0.0011,
+        "val_auc_excl_thin": -0.0013,
+        "test_loss": -0.0002,
+        "test_auc_excl_thin": 0.0045
+      }
+    },
+    {
+      "round": 5,
+      "png": {
+        "fit": {
+          "phase_s": 108.5,
+          "data_wait_s": 95.4,
+          "compute_s": 12.7
+        },
+        "server_eval_test_phase_s": 15.9,
+        "server_eval_val_phase_s": 12.5,
+        "val_loss": 0.179,
+        "val_auc_excl_thin": 0.7242,
+        "test_loss": 0.1844,
+        "test_auc_excl_thin": 0.686
+      },
+      "uint8_cache": {
+        "fit": {
+          "phase_s": 13.3,
+          "data_wait_s": 0.4,
+          "compute_s": 12.5
+        },
+        "server_eval_test_phase_s": 1.2,
+        "server_eval_val_phase_s": 1.0,
+        "val_loss": 0.1796,
+        "val_auc_excl_thin": 0.7134,
+        "test_loss": 0.1846,
+        "test_auc_excl_thin": 0.6869
+      },
+      "difference_cache_minus_png": {
+        "val_loss": 0.0006,
+        "val_auc_excl_thin": -0.0108,
+        "test_loss": 0.0002,
+        "test_auc_excl_thin": 0.0009
+      }
+    }
+  ],
+  "max_abs_difference_cache_vs_png": {
+    "val_loss": 0.0029,
+    "val_auc_excl_thin": 0.0217,
+    "test_loss": 0.0043,
+    "test_auc_excl_thin": 0.0239
+  },
+  "speed": {
+    "elapsed_seconds_png": 936.4,
+    "elapsed_seconds_cache": 78.4,
+    "fit_phase_seconds_round_2_png": 108.0,
+    "fit_phase_seconds_round_2_cache": 12.7,
+    "note": "arithmetic on the numbers above; rounds 2 to 5 are the steady state"
+  },
+  "acceptance_against_docs_06": {
+    "1_zero_failures": true,
+    "2_pixel_equality": true,
+    "3_shard_hashes": true,
+    "3b_attached_dataset_reverified": "shard_hash_mismatches 0, 400 rows compared, 0 mismatches, cache_sha256 unchanged",
+    "4_data_wait_share_from_round_2_below_0_5": true,
+    "5_side_by_side": "reported above; report-only, no pass or fail"
+  }
+}

@@ -178,6 +178,16 @@ DATA = "/kaggle/input/datasets/nih-chest-xrays/data"
 The DataLoader measurements run before anything touches CUDA, on purpose (the fork-after-CUDA deadlock in CLAUDE.md).
 Do not change `--workers` to values above the CPU count that `nvidia-smi` and the output report.
 
+## Cell 8. Compute-only benchmark: what do channels_last and AMP buy? (GPU notebook, about 2 minutes, no data needed)
+Synthetic tensors, ResNet-18, fp32 against channels_last, AMP (float16 with a GradScaler) and both, at 224 and 128 px. It
+measures throughput and, for inference, the largest logit difference from fp32; it does not train anything and says nothing
+about accuracy. Run after the code cell (G1) of the GPU notebook.
+```python
+%cd /kaggle/temp/EveFL
+!python scripts/profile_compute.py --batch-size 32 --image-sizes 224,128 --warmup 5 --iters 30 \
+    --output /kaggle/working/profile_compute.json
+```
+
 ## What changed in cells 5 and 6 (profiling)
 - Federated evaluate is now OFF by default (it was a second full pass over each client's training data and fed nothing).
   Add `--federated-evaluate` to cell 5 only if you want that pass measured; the value is recorded in the results JSON.

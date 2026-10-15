@@ -279,18 +279,35 @@ print("failures:", json.load(open(p / "failures.json"))["n_failures"])
 
 **Save it as a private dataset** (in the Kaggle UI, no token needed): when the run has finished, open the saved version, go to
 the **Output** tab, choose **New Dataset**, name it `evefl-cache-u8-256`, set visibility **Private**. It is about 7.35 GB.
-In later notebooks attach it, then find its real path (do not guess it):
-```python
-!find /kaggle/input -name index.json
-```
 
-**Use it** (GPU notebook; same lite run as the profile run, with the cache attached; cell 6 then prints the data wait share,
-including the "from round 2" figure that the acceptance rule reads):
+### Using the cache in a GPU notebook (a fresh session has no clone and no partition)
+Notebook settings: **Accelerator GPU**, Internet on, `GITHUB_TOKEN` secret enabled, and three datasets attached:
+`nih-chest-xrays`, the weights dataset and `evefl-cache-u8-256`. Run these in order; each one needs the one before it.
+1. **Cell 1** of this runbook (clone to `/kaggle/working/EveFL`, install, import check). Without it `/kaggle/working/EveFL`
+   does not exist and every later `%cd` fails.
+2. **Cell 2** (weights hash).
+3. **Cell 4** (lite partition, seed 42, 5%). The partition from an earlier session is gone; the same seed and NumPy give the
+   same index hashes.
+4. **Find and verify the cache.** This finds the folder itself (no placeholder to edit), then re-hashes every shard and
+   compares 200 rows with the PNG pipeline. Paste back all of its output. The cache hash must be the one in
+   `docs/validation/image_cache_build_2026-10-12.json`.
+```python
+%cd /kaggle/working/EveFL
+import glob, os
+hits = [os.path.dirname(p) for p in glob.glob("/kaggle/input/**/index.json", recursive=True)
+        if os.path.exists(os.path.join(os.path.dirname(p), "shard_00000.npy"))]
+print("cache folders found:", hits)
+assert len(hits) == 1, "expected exactly one attached cache dataset"
+CACHE = hits[0]
+DATA = "/kaggle/input/datasets/nih-chest-xrays/data"
+!python scripts/build_image_cache.py --data-root {DATA} --verify {CACHE} --verify-sample 200
+```
+5. **The lite run on the cache backend** (same lite run as the profile run, with the cache attached; cell 6 then prints the
+   data wait share, including the "from round 2" figure that the acceptance rule reads). `CACHE` is still set from step 4:
 ```python
 %cd /kaggle/working/EveFL
 DATA = "/kaggle/input/datasets/nih-chest-xrays/data"
 WEIGHTS = "/kaggle/input/datasets/parineetarana1/evefl-resnet18-weights/resnet18_imagenet.pth"
-CACHE = "/kaggle/input/datasets/parineetarana1/evefl-cache-u8-256"   # replace with the folder `find` printed
 !python -m evefl.fl.server \
     --data-root {DATA} --partition-root /kaggle/working/partitions_lite \
     --num-rounds 5 --local-epochs 1 --batch-size 32 --seed 0 \
@@ -299,8 +316,11 @@ CACHE = "/kaggle/input/datasets/parineetarana1/evefl-cache-u8-256"   # replace w
     --image-backend uint8_cache --image-cache-root {CACHE} \
     --experiment-name lite_alpha0_seed0_cache --output /kaggle/working/results/lite_alpha0_seed0_cache.json
 ```
-Reading it: the first epoch over a freshly attached dataset reads the shards from disk (cold page cache), so round 1 is
-slower; the acceptance rule reads the data-wait share from round 2 onward, and the round 1 figure is reported next to it.
+6. **Cell 6** (summary), with `OUT` set to `/kaggle/working/results/lite_alpha0_seed0_cache.json`.
+
+Reading it: the first epoch over a freshly attached dataset reads the shards from disk (cold page cache), and the verify
+step in 4 already reads every shard once, so round 1 is the least representative; the acceptance rule reads the data-wait
+share from round 2 onward, and the round 1 figure is reported next to it. Say in your paste whether step 4 ran before the run.
 
 ## What I will check when you paste
 - cell 1 printed a commit line, `flwr 1.13.0` and the import line, with no traceback and no token anywhere in the output,

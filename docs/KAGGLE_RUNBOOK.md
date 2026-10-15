@@ -280,34 +280,124 @@ print("failures:", json.load(open(p / "failures.json"))["n_failures"])
 **Save it as a private dataset** (in the Kaggle UI, no token needed): when the run has finished, open the saved version, go to
 the **Output** tab, choose **New Dataset**, name it `evefl-cache-u8-256`, set visibility **Private**. It is about 7.35 GB.
 
-### Using the cache in a GPU notebook (a fresh session has no clone and no partition)
-Notebook settings: **Accelerator GPU**, Internet on, `GITHUB_TOKEN` secret enabled, and three datasets attached:
-`nih-chest-xrays`, the weights dataset and `evefl-cache-u8-256`. Run these in order; each one needs the one before it.
-1. **Cell 1** of this runbook (clone to `/kaggle/working/EveFL`, install, import check). Without it `/kaggle/working/EveFL`
-   does not exist and every later `%cd` fails.
-2. **Cell 2** (weights hash).
-3. **Cell 4** (lite partition, seed 42, 5%). The partition from an earlier session is gone; the same seed and NumPy give the
-   same index hashes.
-4. **Find and verify the cache.** This finds the folder itself (no placeholder to edit), then re-hashes every shard and
-   compares 200 rows with the PNG pipeline. Paste back all of its output. The cache hash must be the one in
-   `docs/validation/image_cache_build_2026-10-12.json`.
+### Using the cache in a GPU notebook (a fresh session has no clone, no partition and no paths)
+Settings: **Accelerator GPU**, Internet on, the `GITHUB_TOKEN` secret enabled, and three datasets attached: `nih-chest-xrays`,
+the weights dataset `parineetarana1/evefl-resnet18-weights` and the cache dataset `evefl-cache-u8-256`. Run the six cells below
+in order; each needs the one before it. Do NOT run the cache build cell in this notebook. They all use the clone in
+`/kaggle/temp/EveFL`, and the input paths are found by code (dataset paths differ between notebooks), never typed.
+
+**G1. Code (clone or update `main`, install, import check).**
 ```python
-%cd /kaggle/working/EveFL
-import glob, os
-hits = [os.path.dirname(p) for p in glob.glob("/kaggle/input/**/index.json", recursive=True)
-        if os.path.exists(os.path.join(os.path.dirname(p), "shard_00000.npy"))]
-print("cache folders found:", hits)
-assert len(hits) == 1, "expected exactly one attached cache dataset"
-CACHE = hits[0]
-DATA = "/kaggle/input/datasets/nih-chest-xrays/data"
+import base64, os, subprocess
+from kaggle_secrets import UserSecretsClient
+
+REPO = "https://github.com/Parineeta-2307/EveFL_Federated_Learning.git"
+os.makedirs("/kaggle/temp", exist_ok=True)
+DEST = "/kaggle/temp/EveFL"
+
+token = UserSecretsClient().get_secret("GITHUB_TOKEN")  # never printed
+basic = base64.b64encode(f"x-access-token:{token}".encode()).decode()
+env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_CONFIG_COUNT": "1",
+       "GIT_CONFIG_KEY_0": "http.extraheader", "GIT_CONFIG_VALUE_0": f"AUTHORIZATION: basic {basic}"}
+
+def git(*args):
+    r = subprocess.run(["git", *args], env=env, capture_output=True, text=True)
+    text = (r.stdout + r.stderr).replace(token, "***").replace(basic, "***")
+    if r.returncode:
+        raise RuntimeError(f"git {args[0]} failed:\n{text}")
+    return text.strip()
+
+if os.path.isdir(f"{DEST}/.git"):
+    git("-C", DEST, "fetch", "origin")
+    git("-C", DEST, "checkout", "main")
+    git("-C", DEST, "pull", "--ff-only", "origin", "main")
+else:
+    git("clone", REPO, DEST)
+print(git("-C", DEST, "log", "--oneline", "-1"))
+del token, basic, env
+
+%cd /kaggle/temp/EveFL
+!pip install -q --no-deps -r requirements-kaggle.txt
+!pip install -q --no-deps -e .
+
+import sys
+sys.path.insert(0, "/kaggle/temp/EveFL")
+import torch, torchvision, numpy, PIL
+print("python", sys.version.split()[0], "| torch", torch.__version__, "| torchvision", torchvision.__version__,
+      "| numpy", numpy.__version__, "| Pillow", PIL.__version__, "| cpu_count", os.cpu_count(),
+      "| cuda", torch.cuda.is_available(), torch.cuda.device_count())
+import evefl.fl.imagecache
+print("import evefl.fl.imagecache: OK")
+```
+
+**G2. Find the inputs and check their hashes** (the walk does not enter the `images*` folders, so it takes seconds, not minutes).
+It stops with a clear message if a dataset is not attached or a hash differs.
+```python
+import hashlib, os
+
+def find_files(root, names, max_depth=6, skip_prefix=("images",)):
+    """Walk /kaggle/input without descending into the 112k PNG folders (names starting with 'images')."""
+    found = {n: [] for n in names}
+    base = root.rstrip("/").count("/")
+    for dirpath, dirnames, filenames in os.walk(root):
+        depth = dirpath.count("/") - base
+        dirnames[:] = [d for d in dirnames if not d.startswith(skip_prefix)] if depth < max_depth else []
+        for n in names:
+            if n in filenames:
+                found[n].append(os.path.join(dirpath, n))
+    return found
+
+def sha256_of(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for block in iter(lambda: f.read(1 << 20), b""):
+            h.update(block)
+    return h.hexdigest()
+
+EXPECTED_WEIGHTS = "9803814b9183a8bdd46cd0c9cd178ec98b51de241084613e975f4fa54d9a57f2"
+EXPECTED_CACHE = "db497ea60fdc0f336ac94c3ff8d935bf755ddcb61ea567fa38fb3a01806a456f"
+
+hits = find_files("/kaggle/input", ["Data_Entry_2017.csv", "resnet18_imagenet.pth", "index.json"])
+print(hits)
+
+csv = hits["Data_Entry_2017.csv"]
+assert len(csv) == 1, f"expected one Data_Entry_2017.csv, found {csv}: attach the nih-chest-xrays dataset"
+DATA = os.path.dirname(csv[0])
+
+w = hits["resnet18_imagenet.pth"]
+assert len(w) == 1, f"expected one resnet18_imagenet.pth, found {w}: attach parineetarana1/evefl-resnet18-weights"
+WEIGHTS = w[0]
+assert sha256_of(WEIGHTS) == EXPECTED_WEIGHTS, "STOP: weights SHA-256 differs from the expected value"
+
+caches = [os.path.dirname(p) for p in hits["index.json"]
+          if os.path.exists(os.path.join(os.path.dirname(p), "shard_00000.npy"))]
+assert len(caches) == 1, f"expected one attached cache dataset (index.json + shard_00000.npy), found {caches}"
+CACHE = caches[0]
+assert sha256_of(os.path.join(CACHE, "index.json")) == EXPECTED_CACHE, "STOP: cache_sha256 differs from the recorded value"
+
+print("DATA   =", DATA)
+print("WEIGHTS=", WEIGHTS, "(sha256 OK)")
+print("CACHE  =", CACHE, "(index.json sha256 = the recorded cache_sha256)")
+```
+
+**G3. The lite partition** (5% of patients, seed 42; a fresh session has none, and the server would otherwise partition the
+FULL dataset). Expect hospital images 1095, 1232, 1975, test 664, val 512, `RESULT: OK`.
+```python
+%cd /kaggle/temp/EveFL
+!python -c "from evefl.fl.dataset import partition_and_save; partition_and_save('{DATA}', '/kaggle/working/partitions_lite', seed=42, subset_fraction=0.05)"
+!python scripts/audit_partition.py --data-root {DATA} --partition-root /kaggle/working/partitions_lite | tail -25
+```
+
+**G4. Verify the attached cache dataset** (re-hashes every shard, compares 200 rows with the PNG pipeline; a few minutes).
+Expect `shard_hash_mismatches: []`, both mismatch counts 0, `VERIFY: OK`.
+```python
+%cd /kaggle/temp/EveFL
 !python scripts/build_image_cache.py --data-root {DATA} --verify {CACHE} --verify-sample 200
 ```
-5. **The lite run on the cache backend** (same lite run as the profile run, with the cache attached; cell 6 then prints the
-   data wait share, including the "from round 2" figure that the acceptance rule reads). `CACHE` is still set from step 4:
+
+**G5. The lite alpha = 0 run on the cache backend** (the same settings as the profile run, plus the backend).
 ```python
-%cd /kaggle/working/EveFL
-DATA = "/kaggle/input/datasets/nih-chest-xrays/data"
-WEIGHTS = "/kaggle/input/datasets/parineetarana1/evefl-resnet18-weights/resnet18_imagenet.pth"
+%cd /kaggle/temp/EveFL
 !python -m evefl.fl.server \
     --data-root {DATA} --partition-root /kaggle/working/partitions_lite \
     --num-rounds 5 --local-epochs 1 --batch-size 32 --seed 0 \
@@ -316,11 +406,31 @@ WEIGHTS = "/kaggle/input/datasets/parineetarana1/evefl-resnet18-weights/resnet18
     --image-backend uint8_cache --image-cache-root {CACHE} \
     --experiment-name lite_alpha0_seed0_cache --output /kaggle/working/results/lite_alpha0_seed0_cache.json
 ```
-6. **Cell 6** (summary), with `OUT` set to `/kaggle/working/results/lite_alpha0_seed0_cache.json`.
 
-Reading it: the first epoch over a freshly attached dataset reads the shards from disk (cold page cache), and the verify
-step in 4 already reads every shard once, so round 1 is the least representative; the acceptance rule reads the data-wait
-share from round 2 onward, and the round 1 figure is reported next to it. Say in your paste whether step 4 ran before the run.
+**G6. Summary** (paste back everything; it prints the numbers the acceptance rule reads).
+```python
+%cd /kaggle/temp/EveFL
+import json
+OUT = "/kaggle/working/results/lite_alpha0_seed0_cache.json"
+!python scripts/summarize_run.py {OUT}
+r = json.load(open(OUT))
+e = r["experiment"]
+p = e["profile"]
+s = p["summary"]
+print("data_backend:", json.dumps(e["data_backend"]))
+print("config_hash :", e["config_hash"])
+print("device      :", p["device"]["default_device"], [d["name"] for d in p["device"]["devices"]])
+print("data wait share, all rounds  :", s["data_wait_share_loaded"])
+print("data wait share, from round 2:", s["data_wait_share_loaded_from_round_2"])
+print("images/s per phase           :", {k: round(v, 1) for k, v in s["images_per_s"].items()})
+for rd in r["rounds"]:
+    for name, ph in rd["timing"]["phases"].items():
+        print("round", rd["round"], name, {k: round(ph[k], 1) for k in ("phase_s", "data_wait_s", "compute_s", "n_images") if k in ph})
+print("gpu util mean per phase, round 2:", {k: v["mean_util_pct"] for k, v in p["gpu_by_phase"].items() if k.startswith("round2:")})
+```
+Reading it: the first pass over a freshly attached dataset reads the shards from disk (cold page cache), and G4 already reads
+every shard once, so round 1 is the least representative; the acceptance rule reads the data-wait share from round 2 onward and
+the round 1 figure is reported next to it. Say in your paste that G4 ran before G5.
 
 ## What I will check when you paste
 - cell 1 printed a commit line, `flwr 1.13.0` and the import line, with no traceback and no token anywhere in the output,

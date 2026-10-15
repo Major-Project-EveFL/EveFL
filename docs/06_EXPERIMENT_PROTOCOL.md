@@ -331,3 +331,13 @@ loss 0.003, test loss 0.004, validation macro AUC over non-thin classes 0.022, t
 item 2, and on the CPU the backends agree to 1e-5; the difference on the GPU is therefore not attributed. It is compared with
 the run-to-run variation of one backend before any claim is made. Runs that are compared with each other must use the same
 backend.
+
+Addendum (2026-10-15), run-to-run variation of one backend. Two more cache-backend lite runs (same seed, partition and code)
+were made and are in `docs/validation/image_cache_lite_run_2026-10-15.json` (`run_to_run_variation`). Across the three,
+the largest per-round spread is validation loss 0.004, test loss 0.003, validation macro AUC over non-thin classes 0.14 and
+test 0.10 (round 2). The cache-versus-png differences above are of the same size as that spread (the AUC differences are much
+smaller; the largest test-loss difference, 0.0043, is slightly larger than the largest spread, 0.0034), and the png values
+fall inside the range of the three cache runs in 9 of 20 per-round comparisons (about 10 are expected if png were another draw from the same
+distribution). Three runs cannot exclude a small systematic difference. The code sets no deterministic-kernel flags, so the GPU
+runs are not bit-reproducible; every protocol comparison therefore uses several seeds (the seeds of this file) and reports the
+spread, and a single lite-scale run is not used to rank methods.

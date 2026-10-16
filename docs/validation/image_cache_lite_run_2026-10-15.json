@@ -5,7 +5,7 @@
   "supersedes": "items 4 and 5 of docs/validation/image_cache_build_2026-10-12.json ('not yet measured')",
   "caveats": [
     "Pipeline check on a 5% patient subset: 3 clients, 5 rounds, 1 local epoch, batch 32, pretrained ResNet-18, seed 0. Neither run is a baseline; no AUC or loss in this file may be quoted as a result in the paper.",
-    "Item 5 of the rule is report-only. The two runs are NOT identical (differences below). GPU run-to-run variation of one backend has not been measured, so the differences are not attributed to the backend or to GPU non-determinism. On the CPU the two backends agree to 1e-5 in the CI end-to-end test.",
+    "Item 5 of the rule is report-only. The two runs are NOT identical (differences below). Three runs of the cache backend with the same seed also differ from each other (the run-to-run variation, block run_to_run_variation, n = 3) by amounts of the same size: largest per-round spread 0.0040 validation loss, 0.0034 test loss, 0.141 validation AUC and 0.098 test AUC, against cache-versus-png maxima of 0.0029, 0.0043, 0.022 and 0.024 (only the test-loss maximum is slightly larger). No systematic difference is shown and three runs cannot exclude a small one. The mechanism (non-deterministic GPU kernels) is a hypothesis and was not tested. On the CPU the two backends agree to 1e-5 in the CI end-to-end test.",
     "The AUC values include thin classes only through val/test macro 'excl_thin'; classes with 1 to 7 positives swing the plain macro AUC by several hundredths between any two runs.",
     "The png run was in the 2026-10-11 session, the cache run in the 2026-10-15 session (different machines and times).",
     "Cache-run timings are transcribed at the one decimal printed; the data-wait shares quoted are the exact values the run's own summary printed."
@@ -239,6 +239,121 @@
     "test_loss": 0.0043,
     "test_auc_excl_thin": 0.0239
   },
+  "run_to_run_variation": {
+    "design": "three runs of the uint8_cache backend, seed 0, same partition, same code; run1 is the run recorded above, rep2 and rep3 were run afterwards in the same GPU session",
+    "runs": {
+      "run1": [
+        {
+          "val_loss": 0.2012,
+          "val_auc_excl_thin": 0.6494,
+          "test_loss": 0.2025,
+          "test_auc_excl_thin": 0.5746
+        },
+        {
+          "val_loss": 0.1949,
+          "val_auc_excl_thin": 0.6199,
+          "test_loss": 0.1963,
+          "test_auc_excl_thin": 0.6418
+        },
+        {
+          "val_loss": 0.1858,
+          "val_auc_excl_thin": 0.6986,
+          "test_loss": 0.1924,
+          "test_auc_excl_thin": 0.652
+        },
+        {
+          "val_loss": 0.1801,
+          "val_auc_excl_thin": 0.7282,
+          "test_loss": 0.1859,
+          "test_auc_excl_thin": 0.6826
+        },
+        {
+          "val_loss": 0.1796,
+          "val_auc_excl_thin": 0.7134,
+          "test_loss": 0.1846,
+          "test_auc_excl_thin": 0.6869
+        }
+      ],
+      "rep2": [
+        {
+          "val_loss": 0.1981,
+          "val_auc_excl_thin": 0.6575,
+          "test_loss": 0.1991,
+          "test_auc_excl_thin": 0.6095
+        },
+        {
+          "val_loss": 0.1933,
+          "val_auc_excl_thin": 0.5978,
+          "test_loss": 0.1969,
+          "test_auc_excl_thin": 0.5752
+        },
+        {
+          "val_loss": 0.1882,
+          "val_auc_excl_thin": 0.668,
+          "test_loss": 0.1895,
+          "test_auc_excl_thin": 0.6452
+        },
+        {
+          "val_loss": 0.1812,
+          "val_auc_excl_thin": 0.7244,
+          "test_loss": 0.1832,
+          "test_auc_excl_thin": 0.6945
+        },
+        {
+          "val_loss": 0.1801,
+          "val_auc_excl_thin": 0.7219,
+          "test_loss": 0.1821,
+          "test_auc_excl_thin": 0.7063
+        }
+      ],
+      "rep3": [
+        {
+          "val_loss": 0.1972,
+          "val_auc_excl_thin": 0.6534,
+          "test_loss": 0.1998,
+          "test_auc_excl_thin": 0.614
+        },
+        {
+          "val_loss": 0.1971,
+          "val_auc_excl_thin": 0.4787,
+          "test_loss": 0.1989,
+          "test_auc_excl_thin": 0.5435
+        },
+        {
+          "val_loss": 0.1857,
+          "val_auc_excl_thin": 0.6697,
+          "test_loss": 0.1901,
+          "test_auc_excl_thin": 0.6651
+        },
+        {
+          "val_loss": 0.179,
+          "val_auc_excl_thin": 0.7357,
+          "test_loss": 0.1844,
+          "test_auc_excl_thin": 0.6942
+        },
+        {
+          "val_loss": 0.1788,
+          "val_auc_excl_thin": 0.7286,
+          "test_loss": 0.183,
+          "test_auc_excl_thin": 0.6968
+        }
+      ]
+    },
+    "max_spread_across_cache_runs": {
+      "val_loss": 0.004,
+      "val_auc_excl_thin": 0.1412,
+      "test_loss": 0.0034,
+      "test_auc_excl_thin": 0.0983
+    },
+    "png_position_against_range_of_cache_runs": {
+      "inside": 10,
+      "below": 7,
+      "above": 3,
+      "comparisons": 20,
+      "inside_expected_if_png_is_another_draw_from_the_same_distribution": "2 of 4 = 0.5 (a new value lies inside the range of 3 exchangeable values with probability 2/4)"
+    },
+    "reading": "Cache runs with the same seed differ from each other by amounts of the same size as the cache run differs from the png run, and the png values are inside their range about half the time. No systematic backend difference is shown; three runs cannot exclude a small one. The mechanism (non-deterministic GPU kernels: the code sets no deterministic flags) is consistent with this and was not tested."
+  },
   "speed": {
     "elapsed_seconds_png": 936.4,
     "elapsed_seconds_cache": 78.4,
@@ -252,6 +367,6 @@
     "3_shard_hashes": true,
     "3b_attached_dataset_reverified": "shard_hash_mismatches 0, 400 rows compared, 0 mismatches, cache_sha256 unchanged",
     "4_data_wait_share_from_round_2_below_0_5": true,
-    "5_side_by_side": "reported above; report-only, no pass or fail"
+    "5_side_by_side": "reported above, with the three-run variation in run_to_run_variation; report-only, no pass or fail"
   }
 }

@@ -352,3 +352,13 @@ With 25% of patients the hours are a quarter. GPU hours for the run counts in th
 224 px, E = 5: 663 h fp32, 250 h with AMP+CL; E = 2: 102 h with AMP+CL; at 128 px, E = 2: 45 h; 25% of patients, 128 px,
 E = 1: 6 h. Sweep of 99 runs, 25% of patients, E = 1: 36 h at 224 px, 16 h at 128 px (198 runs: 72 h and 32 h). No 128 px
 preprocessing pipeline or cache exists yet, so the 128 px rows describe the model's compute only.
+
+Addendum (2026-10-15), run-to-run variation of one backend. Two more cache-backend lite runs (same seed, partition and code)
+were made and are in `docs/validation/image_cache_lite_run_2026-10-15.json` (`run_to_run_variation`). Across the three,
+the largest per-round spread is validation loss 0.004, test loss 0.003, validation macro AUC over non-thin classes 0.14 and
+test 0.10 (round 2). The cache-versus-png differences above are of the same size as that spread (the AUC differences are much
+smaller; the largest test-loss difference, 0.0043, is slightly larger than the largest spread, 0.0034), and the png values
+fall inside the range of the three cache runs in 9 of 20 per-round comparisons (about 10 are expected if png were another draw from the same
+distribution). Three runs cannot exclude a small systematic difference. The code sets no deterministic-kernel flags, so the GPU
+runs are not bit-reproducible; every protocol comparison therefore uses several seeds (the seeds of this file) and reports the
+spread, and a single lite-scale run is not used to rank methods.

@@ -107,7 +107,7 @@ evefl/orchestration/state_machine.py (pure logic; LOCKDOWN threshold guarded >= 
 evefl/fl (model, dataset, imagecache: uint8 cache build/read/verify, partition: patient-level train/val/test split,
 client, strategy, screening, schedule, runner, evaluation, server) | evefl/config/settings.yaml | evefl/registry.py | dashboard/ (Streamlit, 4 pages) |
 scripts/ (smoke_test, run_experiments, audit_partition, qber_sweep, table3_theorem1, validate_backends,
-summarize_run, cache_pretrained_weights, profile_loading, build_image_cache) | docs/ (01-06, paper_patches/, validation/, KAGGLE_RUNBOOK.md) | tests/
+summarize_run, cache_pretrained_weights, profile_loading, profile_compute, build_image_cache) | docs/ (01-06, paper_patches/, validation/, KAGGLE_RUNBOOK.md) | tests/
 Only `qber` (a sampled estimate) may drive the controller; `sim_only_*` metadata is simulation ground truth.
 Data split: P0-4 is verified on the real ChestX-ray14 metadata (`docs/validation/partition_audit_real.json`: seed 42, all
 overlaps 0). `partition_meta.json` stores `index_sha256` for every index file (`scripts/audit_partition.py` verifies it) and

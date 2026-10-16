@@ -331,3 +331,24 @@ loss 0.003, test loss 0.004, validation macro AUC over non-thin classes 0.022, t
 item 2, and on the CPU the backends agree to 1e-5; the difference on the GPU is therefore not attributed. It is compared with
 the run-to-run variation of one backend before any claim is made. Runs that are compared with each other must use the same
 backend.
+
+### Addendum 2026-10-15: measured effect of AMP, channels_last and 128 px on compute (projection updated)
+Measured by `scripts/profile_compute.py` on a Kaggle GPU (`docs/validation/compute_benchmark_2026-10-15.json`; synthetic
+tensors, batch 32, one run per cell): training images/s, 224 px: fp32 362, channels_last alone 287 (0.79x, slower), AMP 721
+(1.99x), AMP + channels_last 962 (2.66x); 128 px: fp32 941 (2.60x the 224 px rate; the table above assumed 3.06x), AMP 1660,
+AMP + channels_last 2149 (5.93x the fp32 224 px rate). Peak training memory falls from 897 to 563 MiB at 224 px with AMP.
+This is throughput only: AMP changes the arithmetic, and its effect on learning is not measured.
+
+Hours per run, projected = the lite-run compute-only rates (342 / 931 / 922 images/s) scaled by these measured ratios; same
+model as the table above (50 rounds, validation every round, test every 5, one T4, loader not limiting):
+
+| local epochs | fp32 224 px | AMP+CL 224 px | fp32 128 px | AMP+CL 128 px |
+|---|---|---|---|---|
+| 1 | 3.8 | 1.5 | 1.5 | 0.6 |
+| 2 | 7.5 | 2.8 | 2.9 | 1.3 |
+| 5 | 18.4 | 6.9 | 7.1 | 3.1 |
+
+With 25% of patients the hours are a quarter. GPU hours for the run counts in the table above (projected): headline 36 runs at
+224 px, E = 5: 663 h fp32, 250 h with AMP+CL; E = 2: 102 h with AMP+CL; at 128 px, E = 2: 45 h; 25% of patients, 128 px,
+E = 1: 6 h. Sweep of 99 runs, 25% of patients, E = 1: 36 h at 224 px, 16 h at 128 px (198 runs: 72 h and 32 h). No 128 px
+preprocessing pipeline or cache exists yet, so the 128 px rows describe the model's compute only.

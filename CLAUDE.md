@@ -43,6 +43,8 @@ that gap honestly, never by overclaiming.
 - Before saying "done", run `ruff check`, `mypy evefl`, `pytest -q` and report the result.
 - Small commits, one concern each, conventional commit messages.
 - When a change closes an item in docs/04_KNOWN_ISSUES.md, update that file in the same commit.
+- A decision or a result that arrives (an ADR, a pre-registration, a result file) adds one line to docs/DECISIONS.md in the
+  same pull request, labelled measured, simulated or projected. That file is what a reviewer or funder is shown first.
 - Code is the truth for what exists. docs/05_ROADMAP.md is the truth for what to build next.
   If they conflict, flag it and ask. Do not silently choose.
 - If blocked, ask one clear question. Do not invent requirements.

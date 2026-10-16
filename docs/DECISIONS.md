@@ -1,7 +1,7 @@
 # EveFL: decisions, architecture, results and limits
 
 A single place to answer "what did you decide, why, and what is the evidence". It is a living log: a change that decides
-something, or a result that arrives, adds a line here in the same pull request. Last reviewed: 2026-10-15.
+something, or a result that arrives, adds a line here in the same pull request. Last reviewed: 2026-10-16.
 
 How to read it
 - **Evidence** points to a file in this repository. "Decided in chat" means the project lead decided it in conversation and no
@@ -75,7 +75,7 @@ Dates are the merge or decision dates in git history where a file records them.
 | E5 | 2026-10-11 | uint8 cache: stored with the same `Resize(256)` call on the RGB-converted image, one channel kept after checking equality, sharded by 4096, resumable, an image that cannot be cached fails the build and is listed (no silent PNG fallback), PNG stays the default backend, the cache hash is in every results JSON and in `config_hash` only when the backend is not PNG, normalisation moves to the device | the data path must be provably the same input | docs/06 (pre-registered acceptance), `evefl/fl/imagecache.py` |
 | E6 | 2026-10-12 to 15 | The cache was **accepted**: items 1 to 4 of the rule hold; item 5 is report-only | see section 4 | `docs/validation/image_cache_build_2026-10-12.json`, `image_cache_lite_run_2026-10-15.json` |
 | E7 | 2026-10-15 | A deterministic-GPU mode is **not built** for now | not needed for correctness; costs throughput; PyTorch documents the adaptive-average-pool backward on CUDA as non-deterministic, so it may need model changes; seeds with confidence intervals are the protocol anyway | decided in chat |
-| E8 | 2026-10-15 | AMP and `channels_last` were benchmarked (throughput only); `channels_last` alone is slower; wiring AMP into training awaits a decision and a learning-effect measurement | the largest remaining compute lever | the compute benchmark script and its result record are on their own branches until merged |
+| E8 | 2026-10-15 | AMP and `channels_last` were benchmarked (throughput only): AMP + `channels_last` trains 2.66x faster at 224 px, `channels_last` alone is slower (0.79x); wiring AMP into training awaits a decision and a learning-effect measurement against the run-to-run spread | the largest remaining compute lever; a speed-up says nothing about accuracy | `scripts/profile_compute.py`, `docs/validation/compute_benchmark_2026-10-15.json` (measured, throughput only) |
 
 ### Process and repository
 | ID | Date | Decision | Why | Evidence |
@@ -84,6 +84,7 @@ Dates are the merge or decision dates in git history where a file records them.
 | P2 | 2026-10 | The repository is private; reference material (`handoff/`, `docs/reference/`) was purged from history with a targeted `filter-branch` that keeps signed commits; the mentor's reference thesis stays out of the repository | not ours to publish | git history, `.gitignore` |
 | P3 | standing | Destructive steps (history rewrites, force pushes, deleting backups or old folders, deleting remote branches) happen only on an explicit instruction, after a backup and a shown verification | irreversibility | working agreement |
 | P4 | standing | Ask before adding a dependency or an improvement; pre-register selection rules in docs/06 before running anything | prevents fitting rules to results | CLAUDE.md |
+| P5 | 2026-10-15 | This file is the single index of decisions, results and limits for reviewers and funders; every decision or result adds one line to it in the same pull request, and a test fails if a cited path disappears | a funder will ask about every decision, architecture choice and result | `tests/test_decisions_log.py`, CLAUDE.md |
 
 ## 4. Results to date
 | Result | Label | Value | File |
@@ -97,6 +98,8 @@ Dates are the merge or decision dates in git history where a file records them.
 | Loader wait in the lite run | measured, Kaggle GPU | 92% of the loaded phases; GPU utilisation 7%; 45 img/s single-process decode against 366 img/s training compute | `kaggle_profile_2026-10-11.json` |
 | Image cache build and verification | measured, Kaggle CPU | 112,120 images, 0 failures, 7.36 GB, 22.3 min, 0 pixel mismatches on 1,517 rows including all 519 RGBA sources; `cache_sha256` `db497ea6...` | `image_cache_build_2026-10-12.json` |
 | Same lite run, cache against PNG | measured, Kaggle GPU, pipeline check | 78 s against 936 s; data wait 0.048 from round 2 against 0.92; GPU utilisation in the fit phase 94% against 16% | `image_cache_lite_run_2026-10-15.json` |
+| Run-to-run variation, 3 cache-backend runs with the same seed | measured, Kaggle GPU, pipeline check | largest per-round spread: validation loss 0.0040, test loss 0.0034, validation macro AUC (non-thin) 0.141, test 0.098; the cache-versus-PNG differences are of the same size, and the PNG values fall inside the cache runs' range in 9 of 20 comparisons | `image_cache_lite_run_2026-10-15.json` (`run_to_run_variation`) |
+| Compute-only throughput of ResNet-18 on synthetic tensors, batch 32, one GPU | measured, Kaggle, one run per cell | 224 px training: fp32 362 img/s, `channels_last` 287, AMP 721, AMP + `channels_last` 962 (2.66x); 128 px fp32 941 (2.60x the 224 px rate, not the 3.06x assumed); peak memory 897 to 563 MiB with AMP | `compute_benchmark_2026-10-15.json` |
 
 Observed but not yet recorded in a result file: a second independent cache build produced the same `cache_sha256`; folder-scan
 time varied between 60 s and 560 s across sessions and build speed by about 30%.
@@ -106,7 +109,8 @@ From the measured lite-run compute rates (342 images/s training, fp32, one T4) a
 compute benchmark; model in docs/06 (50 rounds, loader not limiting, one GPU). One full-data run at 224 px and 5 local
 epochs is about 18 h in fp32; about 7 h with AMP and `channels_last` (throughput only, learning effect not measured). A 36-run
 headline set at that profile is far beyond a few weeks of Kaggle quota, which is why a reduced profile for sweeps is planned.
-The full table is in docs/06; the benchmark record is on its own branch until merged.
+The full table is in docs/06; the benchmark is `docs/validation/compute_benchmark_2026-10-15.json`. The measured 128 px ratio
+(2.60x, not 3.06x) corrected the earlier 128 px hours upwards by about 15%.
 
 ## 6. What we do not claim
 - Keys are simulated and seed-determined; no statement of key secrecy is made. The finite-key bound assumes basis-symmetric channels.

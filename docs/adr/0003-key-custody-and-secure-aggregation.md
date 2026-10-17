@@ -1,8 +1,8 @@
 # ADR 0003: Key custody and secure aggregation (pairwise masking is the baseline, CKKS is optional)
 
-Status: ACCEPTED, with the amendments of 2026-10-10 (see "Decisions"). It takes effect when the branch
-`docs/adr-0003-amendments` is merged. Only step 1 (KeyManager) is implemented; no SecureAggregator code is written before this
-amended ADR is merged, and everything else below is a design commitment, not a result.
+Status: ACCEPTED, with the amendments of 2026-10-10 (see "Decisions"); the amendments were merged on 2026-10-11. Step 1
+(KeyManager) and step 2a (fixed-point codec and mask PRG) are implemented and tested as a library; everything else below is a
+design commitment, not a result.
 
 ## Context
 - ADR 0001 gives every client, every round, its own QKD link key, produced by a separate large exchange (2^17 qubits,
@@ -391,4 +391,13 @@ patches (a short patch with the claims above, including Theorems 3 and 4).
   single-use checks, the wipe, the no-key guard) were each caught by at least one test.
 - **Not done, and not claimed:** nothing is wired into the FL path yet, so P1-1 stays open; the keys are simulated,
   seed-determined and not secret; no secure aggregation exists; the "nothing in the clear" property is shown for the sender
-  object, not yet for the whole round. Steps 2 to 5 are not started.
+  object, not yet for the whole round. Steps 2b, 2c and 3 to 5 are not started.
+- **Step 2a (fixed-point codec and mask PRG): implemented as a library, 2026-10-17, branch `feat/secagg-primitives`.** Code:
+  `evefl/crypto/secagg/fixedpoint.py` (64-bit fixed point with 32 fractional bits, modular add and subtract, the client-side
+  range assertion `|x| * n < 2^31` with NaN and infinity refused, and an aggregator post-check that aborts when a decoded
+  element reaches 2^30), `evefl/crypto/secagg/prg.py` (per-(pair, round, tensor) HKDF key, AES-256-CTR from counter zero,
+  little-endian uint64 words, ids ordered by UTF-8 bytes, single-use streams and one attempt per round id enforced in code) and
+  `encoding.py`. Tests: `tests/test_secagg_fixedpoint.py` (acceptance test 10) and `tests/test_secagg_prg.py` (acceptance
+  test 17), written and seen to fail before the code. **Not done, and not claimed:** no seed provider, no aggregator class,
+  nothing wired into the FL path; the aggregate post-check cannot detect a wrap that lands near zero, which is why the
+  client-side assertion is the primary defence.

@@ -27,7 +27,7 @@ QKD hardware. The project is a research prototype with tests and recorded result
 | QKD simulation | BB84 with a channel model (noise, intercept-resend); exact NumPy backend, Qiskit reference | implemented, simulated | `docs/validation/backend_crosscheck.json` |
 | Key layer | key from its own 2^17-qubit block, Cascade, verification hash, Toeplitz privacy amplification, finite-key bound | implemented, simulated | [ADR 0001](adr/0001-key-block-separate-from-controller-block.md), `docs/validation/key_rates.json` |
 | Link protection | HKDF-SHA256 bound to round, client and direction; AES-256-GCM with bound associated data; single use; best-effort zeroization | implemented as a library and tested; **not yet wired into the FL path** | [ADR 0003](adr/0003-key-custody-and-secure-aggregation.md) step 1, `evefl/crypto/linkkeys.py`, `keymanager.py` |
-| Secure aggregation | pairwise masking so the server learns only the sum | **designed and accepted, not implemented** | ADR 0003, layer 2 |
+| Secure aggregation | pairwise masking so the server learns only the sum | **designed and accepted; step 2a (fixed-point codec, mask PRG) implemented and tested as a library; no seed provider or aggregator yet, nothing wired in** | ADR 0003, layer 2 |
 | FL runner | single-process sequential driver around Flower's strategy and client | implemented | `evefl/fl/runner.py` |
 | Data | patient-level disjoint train, validation and test splits, Dirichlet(0.5) across hospitals | implemented, verified on the real metadata | `docs/validation/partition_audit_real.json` |
 | Image backends | PNG decode (default, reference) or pre-resized uint8 cache | implemented, accepted | docs/06, `docs/validation/image_cache_build_2026-10-12.json` |
@@ -51,6 +51,7 @@ Dates are the merge or decision dates in git history where a file records them.
 | S9 | 2026-10-04 | Theorem 3 is removed from, or heavily qualified in, secure-mode claims | it assumes a server that sees plaintext updates | keeping it as stated | ADR 0003, "Paper impact" |
 | S10 | 2026-10-10 | Each client refuses to take part unless the announced set has at least the floor, every id is in its registry and it is in the set; advertisements are signed over a hash of the set | the server-side floor protects nobody when the server is the adversary | trusting the announced set | ADR 0003 amendments 1 and 2 |
 | S11 | 2026-10 | Kyber is out of scope for now; the key combiner is labelled and KEM-ready; no hybrid or post-quantum claim is made | keeps the design honest about what is implemented | claiming a hybrid scheme | ADR 0003, decided in chat |
+| S14 | 2026-10-17 | Secure aggregation 2a: 64-bit fixed point with a client-side range assertion (`\|x\| * n < 2^31`, NaN and infinity refused) and an aggregator post-check that aborts at `\|sum\|` of 2^30; one HKDF key per (pair, round, tensor) and AES-256-CTR from counter zero; ids ordered by UTF-8 bytes; single-use streams and one attempt per round id enforced in code | masks must cancel exactly and a wrap must not be silent; no (key, counter) pair may repeat | a partitioned counter space under one key per pair (bookkeeping error-prone) | ADR 0003 amendment 4, `evefl/crypto/secagg/`, `tests/test_secagg_fixedpoint.py`, `tests/test_secagg_prg.py` |
 | S12 | 2026-10 | Simulated keys are labelled seed-determined and not secret wherever they appear; zeroization is "best effort" on our own buffers | Python cannot guarantee memory erasure | calling it secure erasure | ADR 0003, [docs/03_SECURITY_MODEL.md](03_SECURITY_MODEL.md) |
 | S13 | 2026-10-16 | SecureAggregator step 2 is built as three branches, tests first: 2a primitives (fixed-point codec, mask PRG), 2b seed provider (ABC, X25519/Ed25519, registry, set checks), 2c aggregator (ABC, `plaintext` and `pairwise_mask`); no new dependency; wiring into the strategy and runner is step 3 | each branch is small enough to review and tests precede code; the ADR's acceptance tests 1 to 3, 8 and 10 to 17 map onto them | one large branch | ADR 0003 (order and tests), decided in chat |
 
@@ -117,7 +118,8 @@ The full table is in docs/06; the benchmark is `docs/validation/compute_benchmar
 ## 6. What we do not claim
 - Keys are simulated and seed-determined; no statement of key secrecy is made. The finite-key bound assumes basis-symmetric channels.
 - QBER measures disturbance on the quantum link; it is not an attack classifier and does not observe interception of classical ciphertext.
-- Secure aggregation does not exist yet; "nothing in the clear" is shown for the sender object only.
+- Secure aggregation does not exist yet as a protocol: only its primitives (fixed-point codec, mask PRG) are implemented and tested;
+  "nothing in the clear" is shown for the sender object only.
 - Masking is classical (X25519): no post-quantum guarantee, whatever the QKD link does.
 - With 3 hospitals masking protects against the server alone; every client can already derive the sum of the others.
 - In secure mode only gross blow-ups of the aggregate are discarded; stealthy, cancelling and just-under-threshold updates are not caught.

@@ -1,7 +1,7 @@
 # EveFL: decisions, architecture, results and limits
 
 A single place to answer "what did you decide, why, and what is the evidence". It is a living log: a change that decides
-something, or a result that arrives, adds a line here in the same pull request. Last reviewed: 2026-10-16.
+something, or a result that arrives, adds a line here in the same pull request. Last reviewed: 2026-10-17.
 
 How to read it
 - **Evidence** points to a file in this repository. "Decided in chat" means the project lead decided it in conversation and no
@@ -52,6 +52,7 @@ Dates are the merge or decision dates in git history where a file records them.
 | S10 | 2026-10-10 | Each client refuses to take part unless the announced set has at least the floor, every id is in its registry and it is in the set; advertisements are signed over a hash of the set | the server-side floor protects nobody when the server is the adversary | trusting the announced set | ADR 0003 amendments 1 and 2 |
 | S11 | 2026-10 | Kyber is out of scope for now; the key combiner is labelled and KEM-ready; no hybrid or post-quantum claim is made | keeps the design honest about what is implemented | claiming a hybrid scheme | ADR 0003, decided in chat |
 | S12 | 2026-10 | Simulated keys are labelled seed-determined and not secret wherever they appear; zeroization is "best effort" on our own buffers | Python cannot guarantee memory erasure | calling it secure erasure | ADR 0003, [docs/03_SECURITY_MODEL.md](03_SECURITY_MODEL.md) |
+| S13 | 2026-10-16 | SecureAggregator step 2 is built as three branches, tests first: 2a primitives (fixed-point codec, mask PRG), 2b seed provider (ABC, X25519/Ed25519, registry, set checks), 2c aggregator (ABC, `plaintext` and `pairwise_mask`); no new dependency; wiring into the strategy and runner is step 3 | each branch is small enough to review and tests precede code; the ADR's acceptance tests 1 to 3, 8 and 10 to 17 map onto them | one large branch | ADR 0003 (order and tests), decided in chat |
 
 ### Data and method
 | ID | Date | Decision | Why | Evidence |
@@ -119,6 +120,15 @@ The full table is in docs/06; the benchmark is `docs/validation/compute_benchmar
 - Masking is classical (X25519): no post-quantum guarantee, whatever the QKD link does.
 - With 3 hospitals masking protects against the server alone; every client can already derive the sum of the others.
 - In secure mode only gross blow-ups of the aggregate are discarded; stealthy, cancelling and just-under-threshold updates are not caught.
+- **Dropout aborts the round and there is no secret-share recovery.** The design is pairwise masking, not the full Bonawitz et al.
+  secure-aggregation protocol, which recovers from dropouts with secret sharing. A single failing or malicious client can force
+  repeated aborts, which is logged per client (ADR 0003, "Dropout").
+- **With 3 clients a server that colludes with one client learns the sum of the other two clients' updates** (the honest
+  anonymity set is 2); with two colluding clients the third update is revealed in full. Neither case is defended.
+- **Under secure aggregation the server cannot compute per-client update norms,** so the median/MAD screening that scores
+  anomalies in CAUTION is unavailable (each round log says `screening: unavailable_secagg`), and **the Groth16 Byzantine claim is
+  not supported:** the circuit is a test-size n = 8 and is not bound to the submitted update (the redesign is the last item of
+  Phase 4). The only server-side defence in secure mode is the aggregate-norm check, with the limits listed above.
 - No accuracy baseline, no membership-inference result and no overhead table exist yet; Section VIII numbers of the paper draft are projected.
 - The 5-hospital run is five disjoint patient-level partitions of one dataset, not five institutions.
 - Novelty rests on prior work cited as QKDFL and FedSec; both citations still have to be verified by DOI (docs/01).
@@ -127,7 +137,7 @@ The full table is in docs/06; the benchmark is `docs/validation/compute_benchmar
 ## 7. Open decisions and next steps
 | Item | Owner | State |
 |---|---|---|
-| SecureAggregator step 2 (primitives, seed provider, aggregator; ADR 0003 tests 1 to 3, 8, 10 to 17) | project lead approves the plan | go given 2026-10-15; plan being reviewed |
+| SecureAggregator step 2 (primitives, seed provider, aggregator; ADR 0003 tests 1 to 3, 8, 10 to 17) | engineering | plan approved 2026-10-16 (S13); 2a in progress |
 | Wire AMP and `channels_last` into training behind flags, then measure the learning effect against the run-to-run spread | project lead | awaiting a decision |
 | Reduced profile for sweeps (25% of patients, 1 epoch); whether to define a 128 px pipeline and cache | project lead | proposed |
 | How many full-profile headline runs and which epochs | project lead | open |

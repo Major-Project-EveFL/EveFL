@@ -150,7 +150,7 @@ def test_signed_masks_cancel_exactly_in_the_sum_over_all_participants():
         streams = {other: prg.MaskStreams(seeds[frozenset((me, other))], round_id=7, me=me, other=other)
                    for other in ids if other != me}
         for t in range(3):
-            for other, s in streams.items():
+            for s in streams.values():
                 total[t] = fp.add(total[t], s.signed_mask(t, 64))
     assert all(not total[t].any() for t in total)
 

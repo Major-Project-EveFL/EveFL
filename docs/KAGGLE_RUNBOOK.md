@@ -442,6 +442,69 @@ Reading it: the first pass over a freshly attached dataset reads the shards from
 every shard once, so round 1 is the least representative; the acceptance rule reads the data-wait share from round 2 onward and
 the round 1 figure is reported next to it. Say in your paste that G4 ran before G5.
 
+## First full-data baseline pilot (B0, one seed): one GPU notebook, run with Save & Run All
+Pre-registered in docs/06 ("first full-data baseline pilot"), which must be merged before this runs. Projected about 3.8 h on
+one T4 (the 12 h session limit leaves a wide margin). A committed run does not depend on the browser, but a version that fails
+keeps no output, and the runner writes its results JSON only at the end, so the per-round lines are also tee'd to a log file.
+Settings: Accelerator GPU, Internet on, `GITHUB_TOKEN` secret enabled, datasets attached: `nih-chest-xrays`, the weights dataset
+and `evefl-cache-u8-256`. Cells, in this order:
+1. **G1** and 2. **G2** of "Using the cache in a GPU notebook" above, unchanged (clone `main`, install; find the inputs and
+   check the weights and cache hashes).
+3. **The FULL partition** (partition seed 42; the server would otherwise partition with the run seed), its audit, and the check
+   against the recorded hashes:
+```python
+%cd /kaggle/temp/EveFL
+import json
+!python -c "from evefl.fl.dataset import partition_and_save; partition_and_save('{DATA}', '/kaggle/working/partitions_full', seed=42)"
+!python scripts/audit_partition.py --data-root {DATA} --partition-root /kaggle/working/partitions_full | tail -12
+meta = json.load(open("/kaggle/working/partitions_full/partition_meta.json"))
+audit = json.load(open("docs/validation/partition_audit_real.json"))
+recorded = json.load(open("docs/validation/kaggle_rerun_2026-10-04.json"))["partition_full_rerun"]["index_sha256"]
+print("counts identical to the audited split:", all(meta["audit"]["stats"][k] == audit["stats"][k] for k in audit["stats"]))
+print("numpy", meta["numpy_version"], "| index hashes equal the 2026-10-04 record:", meta["index_sha256"] == recorded)
+assert meta["audit"]["ok"], "STOP: partition overlap"
+```
+4. **Verify the attached cache** (a few minutes; it also warms the page cache):
+```python
+%cd /kaggle/temp/EveFL
+!python scripts/build_image_cache.py --data-root {DATA} --verify {CACHE} --verify-sample 200
+```
+5. **The pilot** (about 4 h; the log is also saved):
+```python
+%cd /kaggle/temp/EveFL
+!python -m evefl.fl.server \
+    --data-root {DATA} --partition-root /kaggle/working/partitions_full \
+    --num-rounds 50 --local-epochs 1 --batch-size 32 --seed 0 \
+    --intercept-probability 0.0 --qubits 1024 --sample-fraction 0.25 \
+    --pretrained --pretrained-weights {WEIGHTS} \
+    --image-backend uint8_cache --image-cache-root {CACHE} --test-eval-every 5 \
+    --experiment-name pilot_b0_full_e1_seed0 --output /kaggle/working/results/pilot_b0_full_e1_seed0.json \
+    2>&1 | tee /kaggle/working/results/pilot_b0_full_e1_seed0.log
+```
+6. **Checks and the numbers to paste back:**
+```python
+%cd /kaggle/temp/EveFL
+import json
+OUT = "/kaggle/working/results/pilot_b0_full_e1_seed0.json"
+!python scripts/summarize_run.py {OUT}
+r = json.load(open(OUT))
+e = r["experiment"]
+print("state_counts:", e["state_counts"], "| failures:", e["n_failures"], "| elapsed s:", round(e["elapsed_seconds"]), "| projected 3.8 h = 13680 s")
+print("weights sha256:", e["init_weights"]["sha256"])
+print("data_backend:", json.dumps({k: e["data_backend"][k] for k in ("name", "cache_sha256")}))
+print("data wait share from round 2:", e["profile"]["summary"]["data_wait_share_loaded_from_round_2"])
+print(f"{'round':>5} {'val_loss':>9} {'val_AUC*':>9} {'test_loss':>10} {'test_AUC*':>10}")
+for rd in r["rounds"]:
+    t = rd.get("server_eval")
+    print(f"{rd['round']:>5} {rd['val_eval']['loss']:>9.4f} {rd['val_eval']['metrics']['macro_auc_roc_excl_thin']:>9.4f} "
+          + (f"{t['loss']:>10.4f} {t['metrics']['macro_auc_roc_excl_thin']:>10.4f}" if t else ""))
+last = r["rounds"][-1]["server_eval"]["metrics"]
+print("final-round per-class test AUC:", {k: round(v, 3) for k, v in last["per_class_auc"].items()})
+print("thin classes:", last["thin_classes"])
+v1, v50 = (r["rounds"][i]["val_eval"]["metrics"]["macro_auc_roc_excl_thin"] for i in (0, -1))
+print("sanity: val_AUC* round 50 > round 1:", v50 > v1)
+```
+
 ## What I will check when you paste
 - cell 1 printed a commit line, `flwr 1.13.0` and the import line, with no traceback and no token anywhere in the output,
 - cell 2 printed `OK`,

@@ -65,6 +65,7 @@ Dates are the merge or decision dates in git history where a file records them.
 | M6 | 2026-10-10 | Federated evaluate is off by default; test evaluated every N rounds and on the final round; validation every round | the second pass fed neither selection nor the controller and cost about 43% of a round | `evefl/fl/server.py`, `experiment.evaluation` in results |
 | M7 | 2026-10-15 | Comparisons use several seeds (0 to 4, minimum 3) with mean and 95% CI; one lite-scale run is never used to rank methods; runs compared with each other use the same image backend | GPU runs are not bit-reproducible: three runs with the same seed differ by up to 0.004 in loss and 0.14 in AUC at lite scale | docs/06 addendum, `docs/validation/image_cache_lite_run_2026-10-15.json` |
 | M8 | standing | Every number in the paper traces to a result file with a config hash and seeds; otherwise it is labelled projected or removed | honesty rule | CLAUDE.md rule 6, docs/06 |
+| M9 | 2026-10-17 | The first full-data baseline is a **single-seed pilot** of B0 (unsecured FedAvg): full data, partition seed 42, run seed 0, 224 px, fp32, cache backend, 50 rounds, validation every round, test every 5 rounds and last; **E = 1, a recorded deviation from the E = 5 specification** because E = 5 is projected at about 18 h per run against about 3.8 h; the primary result is the round-50 test AUC with no selection | the first measured accuracy figure and a full-scale check of the compute projection, without spending quota on a configuration that cannot be repeated for several seeds | E = 5 pilot; AMP in the pilot (learning effect not yet measured) | docs/06 (pre-registered 2026-10-17) |
 
 ### Engineering and performance
 | ID | Date | Decision | Why | Evidence |
@@ -138,6 +139,7 @@ The full table is in docs/06; the benchmark is `docs/validation/compute_benchmar
 | Item | Owner | State |
 |---|---|---|
 | SecureAggregator step 2 (primitives, seed provider, aggregator; ADR 0003 tests 1 to 3, 8, 10 to 17) | engineering | plan approved 2026-10-16 (S13); 2a in progress |
+| First full-data baseline pilot (B0, seed 0, E = 1, fp32, cache backend) | engineering writes cells, project lead runs on Kaggle | pre-registered 2026-10-17 (M9); not yet run |
 | Wire AMP and `channels_last` into training behind flags, then measure the learning effect against the run-to-run spread | project lead | awaiting a decision |
 | Reduced profile for sweeps (25% of patients, 1 epoch); whether to define a 128 px pipeline and cache | project lead | proposed |
 | How many full-profile headline runs and which epochs | project lead | open |

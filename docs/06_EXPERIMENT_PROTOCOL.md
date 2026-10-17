@@ -362,3 +362,48 @@ fall inside the range of the three cache runs in 9 of 20 per-round comparisons (
 distribution). Three runs cannot exclude a small systematic difference. The code sets no deterministic-kernel flags, so the GPU
 runs are not bit-reproducible; every protocol comparison therefore uses several seeds (the seeds of this file) and reports the
 spread, and a single lite-scale run is not used to rank methods.
+
+## Pre-registered: first full-data baseline pilot, B0, one seed (before the run exists)
+Written 2026-10-17, before any full-data run has been made. Its purpose is to produce the first measured accuracy figure and to
+check at full scale that the pipeline trains and that the compute projection (above) is about right. It is a **single-seed
+pilot**: it is not the baseline of the paper (which needs seeds 0 to 4, minimum 3, with mean and 95% CI), it ranks nothing, and
+no number from it is quoted without the words "single-seed pilot, E = 1".
+
+**Settings (fixed now; nothing is tuned on the outcome).**
+- Data: all 112,120 images, 3 simulated hospitals, patient-level Dirichlet(0.5) partition with **partition seed 42** (the audited
+  one: `docs/validation/partition_audit_real.json`; on Kaggle under NumPy 2.1.3 its index hashes are those of
+  `docs/validation/kaggle_rerun_2026-10-04.json`), 10% test and 10% validation split by patient. The server must find this
+  partition on disk; left to itself it would partition with the run seed, so the partition is created first.
+- Run seed 0. Images 224 px. **1 local epoch (E = 1)**, 50 rounds, batch size 32, AdamW with base learning rate 1e-3 and cosine
+  annealing over the global round, pretrained ResNet-18 from the local weights file (SHA-256 `9803814b...54d9a57f2`).
+- Arithmetic fp32 (no AMP, no `channels_last`): the reference arithmetic. Image backend `uint8_cache`, cache
+  `cache_sha256` `db497ea60fdc0f336ac94c3ff8d935bf755ddcb61ea567fa38fb3a01806a456f`.
+- B0, unsecured FedAvg: no attack, no extra noise (`--intercept-probability 0`, default policy `global`). The controller stays
+  SECURE, every client trains every round, aggregation is plain FedAvg, and link protection is not in the FL path, so B0 and B1
+  coincide in accuracy; the run is B0.
+- Evaluation: validation every round; test every 5 rounds and on the final round (`--test-eval-every 5`); federated evaluate off.
+- Hardware: one Kaggle GPU session, run with "Save & Run All" so that it does not depend on the browser.
+
+**Deviation from the E = 5 specification (recorded, with the reason).** The Setup section above gives E local epochs, default 5,
+"reduce for budget". This pilot uses **E = 1**. Reason: compute. The projection above puts one full-data run at 224 px in fp32
+at about 18.4 h for E = 5 and about 3.8 h for E = 1 (projected), and a weekly GPU quota of about 30 h (to be checked on the quota
+page). A run at E = 1 is not comparable with an E = 5 result and is not expected to reach the same accuracy.
+
+**Reported (all of it, whatever the values).**
+1. Per round: validation loss and validation macro AUC over non-thin classes (`val_AUC*`); at rounds 5, 10, ..., 50: test loss and
+   test macro AUC and macro AUC over non-thin classes, with per-class AUC and the thin-class list at the final round.
+2. **Primary result: the test macro AUC over non-thin classes at round 50 (no selection).** Secondary: among the ten
+   test-evaluated rounds, the one with the highest validation `val_AUC*` (ties go to the later round) and its test AUC. The
+   test split is read only at the rounds above.
+3. Elapsed seconds, the per-phase timing and data-wait share (`experiment.profile`), and the measured elapsed time next to the
+   projected 3.8 h, labelled measured and projected.
+4. The full results JSON is kept (config hash, library versions, cache and weights hashes).
+
+**Checks before any AUC is read** (a failed check is reported, the run is not re-tuned): `state_counts` is SECURE for all 50
+rounds and `n_failures` is 0; the weights hash, the cache hash and the full-partition index hashes equal the values above; the
+validation `val_AUC*` at round 50 is higher than at round 1 (the model learned something; if not, this is investigated, not
+tuned away).
+
+**If the run dies** (session limit, crash): the per-round lines in the saved log are kept and reported as an incomplete run; the
+same settings are run again. Nothing is resumed from a partial state because the runner has no checkpoint (a known limit).
+**Deviations** from this rule are listed in this file with the reason and the date, as for the sweeps above.

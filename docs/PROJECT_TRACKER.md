@@ -9,7 +9,7 @@ Status words: **DONE** (code, a passing test and, for numbers, a result file exi
 core claim). Sizes are relative effort, not dates: S = a day or less, M = a few days, L = a week or more, C = compute-bound
 (hours on a GPU, not hours of typing).
 
-Counts: DONE 17, PARTIAL 6, TODO 27, WAITING 5, STRETCH 4 (59 items)
+Counts: DONE 18, PARTIAL 6, TODO 26, WAITING 5, STRETCH 4 (59 items)
 
 ## Phase 0: stabilise
 | ID | Item | Status | Evidence / what is left |
@@ -80,8 +80,8 @@ Counts: DONE 17, PARTIAL 6, TODO 27, WAITING 5, STRETCH 4 (59 items)
 ## Phase 6: productisation and demo
 | ID | Item | Status | Evidence / what is left |
 |---|---|---|---|
-| 6.1 | Dashboard: four pages that render | PARTIAL | `dashboard/app.py`, `dashboard/pages/`: the results page reads an older file format and shows nothing for current runs; the QBER page uses the Qiskit reference backend instead of the fast NumPy one; the controller page predates the policy modes; the crypto page is an honest placeholder for CKKS and Groth16 |
-| 6.2 | Dashboard reads the current results files (per-round state, QBER, exclusions, AUC curves, timing) | TODO | S/M |
+| 6.1 | Dashboard: four pages that render | PARTIAL | `dashboard/app.py`, `dashboard/pages/`: the results page now reads current files; the QBER page uses the Qiskit reference backend instead of the fast NumPy one, the controller page predates the policy modes, and the crypto page is an honest placeholder for CKKS and Groth16 |
+| 6.2 | Dashboard reads the current results files (per-round state, QBER, exclusions, AUC curves, timing) | DONE | `evefl/results_view.py`, `dashboard/pages/4_fl_results.py`, `tests/test_results_view.py` (checked on a real tiny run) |
 | 6.3 | Interactive attack lab on the real controller and policy code (Eve slider, per-link, hysteresis) | TODO | M |
 | 6.4 | Secure-aggregation demo page (masked updates look random; the sum is exact; the N = 3 collusion case) | TODO | M: after 4.5 |
 | 6.5 | Inference page: upload one chest X-ray, get 14 probabilities, clearly marked research-only | TODO | M: needs 3.5 and a trained model |

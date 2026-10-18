@@ -88,6 +88,8 @@ streamlit run dashboard/app.py
   written into the results JSON. `--federated-evaluate` (off by default) and `--test-eval-every N` (test every N rounds + the
   last; validation every round and alone drives selection) are recorded under `experiment.evaluation`; `experiment.profile`
   holds device, nvidia-smi samples and time per phase (loader wait vs compute); `scripts/profile_loading.py` is the micro-benchmark.
+  `--save-model DIR` writes the final-round and the best-VALIDATION-AUC checkpoints (`.pt`, git-ignored) and records their
+  manifest under `experiment.checkpoints`; it does not change what is trained or the config hash.
   `--image-backend png|uint8_cache` (+ `--image-cache-root`): `png` is the default and the reference; `uint8_cache` serves the
   pre-resized shards built by `scripts/build_image_cache.py` (acceptance in docs/06). Every results JSON records
   `experiment.data_backend` (and the cache SHA-256); the backend is in `config_hash` only when it is not `png`.

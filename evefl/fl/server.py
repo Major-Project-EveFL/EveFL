@@ -60,6 +60,7 @@ from flwr.common import ndarrays_to_parameters
 
 from evefl import environment as _environment
 from evefl.fl.channels import ChannelPlan, build_plan
+from evefl.fl.checkpoint import CheckpointSaver
 from evefl.fl.client import DEFAULT_LR, DEFAULT_WEIGHT_DECAY, create_client_fn, get_model_parameters
 from evefl.fl.dataset import (
     DEFAULT_IMAGE_BACKEND,
@@ -242,6 +243,7 @@ def run_experiment(
     val_eval_every: int = 1,
     run_federated_evaluate: bool = False,
     image_backend: Optional[ImageBackend] = None,
+    save_model_dir: Optional[Path] = None,
 ) -> Dict[str, Any]:
     """
     Run one complete EveFL federated-learning experiment on the
@@ -309,6 +311,8 @@ def run_experiment(
         policy_config=policy_config,
     )
 
+    saver = CheckpointSaver(save_model_dir, name=experiment_name, metadata={}) if save_model_dir is not None else None
+
     start_time = time.perf_counter()
     log.info("Starting sequential (Ray-free) EveFL run: %d round(s), %d client(s)...",
               num_rounds, num_clients)
@@ -323,6 +327,7 @@ def run_experiment(
             initial_parameters=initial_parameters,
             run_federated_evaluate=run_federated_evaluate,
             clock_start=start_time,
+            on_round_end=saver.observe if saver is not None else None,
         )
     finally:
         sampler.stop()
@@ -368,6 +373,16 @@ def run_experiment(
             "selection_uses": "validation split only",
         },
     )
+
+    if saver is not None:
+        # Written after the log is built so the checkpoints carry the run's config hash; saving changes nothing that is trained.
+        saver.metadata.update({
+            "experiment": experiment_name, "config_hash": experiment_log["experiment"]["config_hash"], "seed": seed,
+            "num_rounds": num_rounds, "local_epochs": local_epochs, "batch_size": batch_size,
+            "weights_sha256": init_weights.get("sha256"), "data_backend": backend.describe().get("name"),
+            "cache_sha256": backend.describe().get("cache_sha256"),
+        })
+        experiment_log["experiment"]["checkpoints"] = saver.finalize(final_parameters, final_round=num_rounds)
 
     with open(output_path, "w") as f:
         json.dump(experiment_log, f, indent=2)
@@ -557,6 +572,10 @@ def _build_arg_parser() -> argparse.ArgumentParser:
                     help="Where model input images come from: png (decode every image every epoch; the default and the "
                          "reference) or uint8_cache (pre-resized uint8 shards from scripts/build_image_cache.py). "
                          "Recorded in the results JSON; part of config_hash only when it is not png.")
+    p.add_argument("--save-model", type=Path, default=None, metavar="DIR",
+                    help="Write the final-round global model and the round with the best VALIDATION AUC to DIR as .pt files "
+                         "(never selected on the test split; kept out of git). The manifest is recorded in the results JSON "
+                         "under experiment.checkpoints. Saving does not change what is trained or the config hash.")
     p.add_argument("--image-cache-root", type=Path, default=None,
                     help="Folder holding index.json of the uint8 cache (required with --image-backend uint8_cache).")
     return p
@@ -617,6 +636,7 @@ def main(argv=None) -> None:
         test_eval_every=args.test_eval_every,
         run_federated_evaluate=args.federated_evaluate,
         image_backend=image_backend,
+        save_model_dir=args.save_model,
     )
 
     log.info("Done: %s", summary)

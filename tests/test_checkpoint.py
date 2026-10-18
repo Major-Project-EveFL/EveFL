@@ -164,11 +164,13 @@ def test_save_model_writes_two_checkpoints_records_them_and_leaves_the_config_ha
     manifest = saved["experiment"]["checkpoints"]
     assert manifest["final"]["round"] == 2
     val_auc = [r["val_eval"]["metrics"][AUC] for r in saved["rounds"]]
-    expected_best = max(range(2), key=lambda i: (val_auc[i], i)) + 1
-    assert manifest["best_validation"]["round"] == expected_best
-    for key in ("final", "best_validation"):
-        path = tmp_path / "ck" / manifest[key]["file"]
-        assert path.exists() and manifest[key]["sha256"] == _sha(path)
+    # On this tiny synthetic split every class is "thin", so the validation AUC is NaN in every round: no round qualifies and no
+    # best-validation file is written (the selection itself is covered by the unit tests above).
+    assert all(v != v for v in val_auc)
+    assert manifest["best_validation"] is None and "no validation" in manifest["note"].lower()
+    path = tmp_path / "ck" / manifest["final"]["file"]
+    assert path.exists() and manifest["final"]["sha256"] == _sha(path)
+    assert not (tmp_path / "ck" / "same_best_val.pt").exists()
     assert manifest["metadata"]["config_hash"] == saved["experiment"]["config_hash"]
 
 

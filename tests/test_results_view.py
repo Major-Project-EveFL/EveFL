@@ -60,8 +60,9 @@ def test_the_pilot_record_loads_with_its_label_caveats_and_headline_numbers():
     assert len(view.rounds) == 50 and list(view.rounds["round"])[:3] == [1, 2, 3]
     assert view.rounds["test_auc_star"].notna().sum() == 10
     headline = dict(view.headline)
-    assert "0.8086" in headline["Primary: test AUC at round 50 (no selection)"]
-    assert "round 25" in headline["Secondary: validation-selected round"]
+    assert headline["Primary: test AUC at round 50 (no selection)"] == "0.8086"
+    assert headline["Secondary: test AUC at the validation-selected round (25)"] == "0.8316"
+    assert headline["Validation AUC peak (round 26)"] == "0.8230"
     assert len(view.per_class_auc) == 14 and view.thin_classes == []
     assert view.settings["local epochs"] == 1 and view.settings["seed"] == 0
 
@@ -83,8 +84,8 @@ def test_a_results_json_gives_states_qber_exclusions_and_validation_and_test_col
 
 def test_headline_uses_the_last_test_evaluation_and_the_best_validation_round_with_ties_to_the_later():
     headline = dict(rv.load_run(_synthetic_results()).headline)
-    assert headline["Last test evaluation (round 2)"].startswith("0.7200")
-    assert headline["Best validation AUC (round 3)"].startswith("0.7000")
+    assert headline["Last test evaluation (round 2)"] == "0.7200"
+    assert headline["Best validation AUC (round 3)"] == "0.7000"
     assert rv.load_run(_synthetic_results()).per_class_auc == {"Atelectasis": 0.8, "Hernia": 0.7}
 
 

@@ -68,6 +68,7 @@ Dates are the merge or decision dates in git history where a file records them.
 | M7 | 2026-10-15 | Comparisons use several seeds (0 to 4, minimum 3) with mean and 95% CI; one lite-scale run is never used to rank methods; runs compared with each other use the same image backend | GPU runs are not bit-reproducible: three runs with the same seed differ by up to 0.004 in loss and 0.14 in AUC at lite scale | docs/06 addendum, `docs/validation/image_cache_lite_run_2026-10-15.json` |
 | M8 | standing | Every number in the paper traces to a result file with a config hash and seeds; otherwise it is labelled projected or removed | honesty rule | CLAUDE.md rule 6, docs/06 |
 | M9 | 2026-10-17 | The first full-data baseline is a **single-seed pilot** of B0 (unsecured FedAvg): full data, partition seed 42, run seed 0, 224 px, fp32, cache backend, 50 rounds, validation every round, test every 5 rounds and last; **E = 1, a recorded deviation from the E = 5 specification** because E = 5 is projected at about 18 h per run against about 3.8 h; the primary result is the round-50 test AUC with no selection | the first measured accuracy figure and a full-scale check of the compute projection, without spending quota on a configuration that cannot be repeated for several seeds | E = 5 pilot; AMP in the pilot (learning effect not yet measured) | docs/06 (pre-registered 2026-10-17) |
+| M10 | 2026-10-18 | A second single-seed run of the pilot with run seed 1 and `--save-model` (everything else identical); the demonstration page will serve its **best-validation checkpoint**, decided before any test number from this run is seen; two runs give a range, not a confidence interval | a second full-scale sample, and a model for the upload page whose choice cannot be influenced by test results | serving the final-round model; choosing the checkpoint by test AUC | docs/06 (pre-registered 2026-10-18) |
 
 ### Engineering and performance
 | ID | Date | Decision | Why | Evidence |
@@ -148,6 +149,8 @@ by roughly that factor. The full table is in docs/06; the benchmark is `docs/val
 |---|---|---|
 | SecureAggregator step 2 (primitives, seed provider, aggregator; ADR 0003 tests 1 to 3, 8, 10 to 17) | engineering | plan approved 2026-10-16 (S13); 2a in progress |
 | First full-data baseline pilot (B0, seed 0, E = 1, fp32, cache backend) | engineering and project lead | done: run 2026-10-17, result recorded 2026-10-18 (section 4) |
+| Second single-seed run with checkpoints (seed 1, M10) | engineering writes cells, project lead runs on Kaggle | pre-registered 2026-10-18; not yet run |
+| After Nov 3: replace the paper's projected numbers (baseline AUC 0.820, convergence by round 38, the basis of the 17.5% time estimate; as listed by the project lead, the paper draft is not in the repository) with measured values, and correct the other hour estimates in docs/06 (low by about 17.5%) | team | planned, after the demo |
 | Number of rounds for the sweep profile (the pilot's validation AUC peaked at round 26 of 50; one seed) | project lead | open |
 | Wire AMP and `channels_last` into training behind flags, then measure the learning effect against the run-to-run spread | project lead | awaiting a decision |
 | Reduced profile for sweeps (25% of patients, 1 epoch); whether to define a 128 px pipeline and cache | project lead | proposed |

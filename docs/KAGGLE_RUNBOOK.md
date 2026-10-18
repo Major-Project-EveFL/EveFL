@@ -506,6 +506,55 @@ v1, v50 = (r["rounds"][i]["val_eval"]["metrics"]["macro_auc_roc_excl_thin"] for 
 print("sanity: val_AUC* round 50 > round 1:", v50 > v1)
 ```
 
+## Second single-seed run with checkpoints (seed 1): one GPU notebook, Save & Run All
+Pre-registered in docs/06 ("second single-seed run with checkpoints"); merge `--save-model` and that pre-registration first. About
+4.5 h. Same settings and notebook set-up as the pilot above (cells 1 to 4 unchanged: **G1**, **G2**, the full partition and the
+cache check). Then:
+
+5. **The run** (creates the output directories first and saves the log this time):
+```python
+%cd /kaggle/temp/EveFL
+!mkdir -p /kaggle/working/results /kaggle/working/checkpoints
+!python -m evefl.fl.server \
+    --data-root {DATA} --partition-root /kaggle/working/partitions_full \
+    --num-rounds 50 --local-epochs 1 --batch-size 32 --seed 1 \
+    --intercept-probability 0.0 --qubits 1024 --sample-fraction 0.25 \
+    --pretrained --pretrained-weights {WEIGHTS} \
+    --image-backend uint8_cache --image-cache-root {CACHE} --test-eval-every 5 \
+    --save-model /kaggle/working/checkpoints \
+    --experiment-name pilot_b0_full_e1_seed1 --output /kaggle/working/results/pilot_b0_full_e1_seed1.json \
+    2>&1 | tee /kaggle/working/results/pilot_b0_full_e1_seed1.log
+```
+6. **Checks and numbers to paste back** (also prints the checkpoint manifest):
+```python
+%cd /kaggle/temp/EveFL
+import hashlib, json, torch
+OUT = "/kaggle/working/results/pilot_b0_full_e1_seed1.json"
+!python scripts/summarize_run.py {OUT}
+r = json.load(open(OUT))
+e = r["experiment"]
+print("state_counts:", e["state_counts"], "| failures:", e["n_failures"], "| elapsed s:", round(e["elapsed_seconds"]), "| pilot: 16078")
+print("weights sha256:", e["init_weights"]["sha256"])
+print("data_backend:", json.dumps({k: e["data_backend"][k] for k in ("name", "cache_sha256")}))
+print(f"{'round':>5} {'val_loss':>9} {'val_AUC*':>9} {'test_loss':>10} {'test_AUC*':>10}")
+for rd in r["rounds"]:
+    t = rd.get("server_eval")
+    print(f"{rd['round']:>5} {rd['val_eval']['loss']:>9.4f} {rd['val_eval']['metrics']['macro_auc_roc_excl_thin']:>9.4f} "
+          + (f"{t['loss']:>10.4f} {t['metrics']['macro_auc_roc_excl_thin']:>10.4f}" if t else ""))
+last = r["rounds"][-1]["server_eval"]["metrics"]
+print("final-round per-class test AUC:", {k: round(v, 3) for k, v in last["per_class_auc"].items()})
+m = e["checkpoints"]
+print("checkpoint manifest:", json.dumps({k: m[k] for k in ("final", "best_validation")}, indent=1))
+for key in ("final", "best_validation"):
+    path = "/kaggle/working/checkpoints/" + m[key]["file"]
+    ok = hashlib.sha256(open(path, "rb").read()).hexdigest() == m[key]["sha256"]
+    payload = torch.load(path, weights_only=True)
+    print(key, "sha256 matches manifest:", ok, "| loads with weights_only:", len(payload["state_dict"]), "tensors, round", payload["round"])
+```
+Download from the notebook's **Output** tab: use **Download all** (the whole output is about 95 MB: results, log, two checkpoints) and
+unzip it into `results/kaggle/` (checkpoints go into `checkpoints/`; both folders are git-ignored). Clicking a single `.json` link
+opens it in the browser instead of downloading it; right-click the link and choose "Save link as", or use Download all.
+
 ## What I will check when you paste
 - cell 1 printed a commit line, `flwr 1.13.0` and the import line, with no traceback and no token anywhere in the output,
 - cell 2 printed `OK`,

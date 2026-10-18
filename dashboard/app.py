@@ -6,6 +6,7 @@ Phase 5: Visualization and interactive demos.
 Navigation:
     - LIVE: BB84 / QBER Explorer
     - LIVE: 3-State Security Controller
+    - LIVE: Attack lab (Eve on a link, three policies compared; simulated control-plane counts)
     - LIVE: Crypto Pipeline Demo (AES-GCM real, CKKS/Groth16 STUB)
     - STATIC: Results explorer (the committed pilot record and any results JSON)
 
@@ -36,6 +37,7 @@ This dashboard is divided into two areas:
 These compute on-the-fly using the EveFL library:
 - **BB84 / QBER Explorer** — Simulate quantum key exchange with configurable Eve attack
 - **Security Controller** — See how QBER maps to SECURE / CAUTION / LOCKDOWN
+- **Attack lab** — Put Eve on a link and compare the three round policies (simulated control-plane counts, not accuracy)
 - **Crypto Pipeline** — AES-256-GCM live demo (CKKS & Groth16 are stubs)
 
 ### 📊 RESULTS Panel

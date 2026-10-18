@@ -1,161 +1,106 @@
 """
-STATIC: FL Results Visualization
+Results explorer: measured results that already exist, shown with the label and caveats they were recorded with.
 
-Reads results/fl_training_log.json (or any uploaded JSON) and renders
-charts for QBER, security states, training metrics, and aggregation actions.
-
-This page does NOT run training. It only visualizes pre-computed results.
+Reads the committed pilot record under docs/validation/ and any results JSON found under results/ (or uploaded). It does NOT run
+training. Parsing lives in `evefl/results_view.py` (tested on the real file schema); this page only draws.
 """
 
 import json
 import sys
 from pathlib import Path
 
+import altair as alt
 import pandas as pd
 import streamlit as st
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
-st.set_page_config(page_title="FL Results", page_icon="📊")
+from evefl import results_view as rv  # noqa: E402
 
-st.title("📊 FL Results")
+st.set_page_config(page_title="Results explorer", page_icon="📊", layout="wide")
+st.title("📊 Results explorer")
+st.caption("Shows measured results that already exist. It does not run training. Every number carries the label it was recorded with.")
 
-st.markdown("""
-Visualize EveFL experiment output. Upload a `fl_training_log.json`
-or use the default path.
-""")
+UPLOAD = "Upload a results file..."
+options = {p.relative_to(REPO_ROOT).as_posix(): p for p in rv.find_runs(REPO_ROOT)}
+choice = st.sidebar.selectbox("Result file", [*options, UPLOAD]) if options else UPLOAD
 
-# ---------------------------------------------------------------------------
-# Load JSON
-# ---------------------------------------------------------------------------
-
-json_path = st.text_input(
-    "Results JSON path",
-    str(REPO_ROOT / "results" / "fl_training_log.json"),
-)
-
-uploaded = st.file_uploader("Or upload a JSON file", type=["json"])
-
-data = None
-
-if uploaded is not None:
-    try:
-        data = json.load(uploaded)
-        st.success("Uploaded JSON loaded successfully.")
-    except json.JSONDecodeError as e:
-        st.error(f"Invalid JSON: {e}")
-else:
-    p = Path(json_path)
-    if p.exists():
-        with open(p, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        st.success(f"Loaded: {p}")
+view = None
+if choice == UPLOAD:
+    uploaded = st.sidebar.file_uploader("A results JSON or pilot record", type=["json"])
+    if uploaded is not None:
+        try:
+            view = rv.load_run(json.load(uploaded))
+        except (ValueError, json.JSONDecodeError) as exc:
+            st.error(f"Cannot read this file: {exc}")
     else:
-        st.warning(f"File not found: {p}")
-        st.info("Run an experiment first: `python scripts/run_experiments.py`")
-
-if data is None:
+        st.info("No result file found under docs/validation or results. Upload one in the sidebar, or run an experiment first.")
+else:
+    view = rv.load_run(options[choice])
+if view is None:
     st.stop()
 
-# ---------------------------------------------------------------------------
-# Experiment metadata
-# ---------------------------------------------------------------------------
+st.header(view.title)
+st.warning(f"**{view.label}**")
+for caveat in view.caveats:
+    st.caption(f"• {caveat}")
+for warning in view.warnings:
+    st.warning(warning)
 
-st.divider()
-st.header("📋 Experiment Metadata")
+if view.headline:
+    columns = st.columns(len(view.headline))
+    for column, (name, value) in zip(columns, view.headline):
+        column.metric(name, value)
+    st.caption("AUC = macro AUC over the classes with at least 20 positives (non-thin classes); see the settings table below.")
 
-meta = data.get("experiment", {})
-cols = st.columns(4)
-cols[0].metric("Name", meta.get("name", "N/A"))
-cols[1].metric("Clients", meta.get("num_clients", "N/A"))
-cols[2].metric("Rounds", meta.get("num_rounds", "N/A"))
-cols[3].metric("Seed", meta.get("seed", "N/A"))
+rounds = view.rounds.set_index("round")
 
-st.json(meta)
 
-# ---------------------------------------------------------------------------
-# Security rounds table
-# ---------------------------------------------------------------------------
+def two_series_chart(frame: pd.DataFrame, validation: str, test: str, y_title: str) -> alt.Chart:
+    """Validation every round (line) and test at the rounds it was evaluated (line with markers); y axis not forced to zero."""
+    val = frame[["round", validation]].rename(columns={validation: "value"}).assign(series="validation (every round)")
+    tst = frame.dropna(subset=[test])[["round", test]].rename(columns={test: "value"}).assign(series="test (evaluated rounds only)")
+    return (alt.Chart(pd.concat([val.dropna(subset=["value"]), tst]))
+            .mark_line(point=True).encode(x=alt.X("round:Q", title="round"),
+                                          y=alt.Y("value:Q", title=y_title, scale=alt.Scale(zero=False)),
+                                          color=alt.Color("series:N", title=None)))
 
-st.divider()
-st.header("🛡️ Security Timeline")
+st.subheader("AUC per round")
+st.caption("Macro AUC over classes with at least 20 positives (non-thin). Validation is evaluated every round and alone drives "
+           "selection; the test split is evaluated only at the rounds shown.")
+st.altair_chart(two_series_chart(view.rounds, "val_auc_star", "test_auc_star", "macro AUC (non-thin)"), use_container_width=True)
 
-rounds = data.get("security", {}).get("rounds", [])
+st.subheader("Loss per round")
+st.altair_chart(two_series_chart(view.rounds, "val_loss", "test_loss", "loss"), use_container_width=True)
 
-if not rounds:
-    st.warning("No round data found in JSON.")
-    st.stop()
+if rounds["system_qber"].notna().any() or rounds["state"].notna().any():
+    st.subheader("Channel state per round")
+    if rounds["system_qber"].notna().any():
+        st.line_chart(rounds[["system_qber"]].rename(columns={"system_qber": "system QBER (fraction)"}))
+    if rounds["state"].notna().any():
+        st.write("Rounds per state:", rounds["state"].value_counts().to_dict())
+        flags = [v for v in rounds["model_updated"].tolist() if isinstance(v, bool)]
+        if flags:
+            st.write("Rounds with the model updated:", sum(flags), "of", len(flags),
+                     "| client-rounds excluded:", int(rounds["n_excluded"].fillna(0).sum()))
 
-df = pd.DataFrame(rounds)
+if view.per_class_auc:
+    st.subheader("Per-class test AUC (last test evaluation)")
+    st.bar_chart(pd.Series(view.per_class_auc, name="AUC").sort_values())
+    if view.thin_classes:
+        st.caption(f"Classes too thin to score reliably: {', '.join(view.thin_classes)}")
 
-# State distribution pie chart
-state_counts = df["state"].value_counts().to_dict()
-state_df = pd.DataFrame({
-    "State": list(state_counts.keys()),
-    "Count": list(state_counts.values()),
-})
+if view.timing:
+    st.subheader("Time")
+    st.bar_chart(pd.Series(view.timing, name="seconds"))
 
-col_chart, col_table = st.columns([1, 2])
+if view.checkpoints:
+    with st.expander("Saved checkpoints (kept out of git)"):
+        st.json(view.checkpoints)
 
-with col_chart:
-    st.subheader("State Distribution")
-    st.bar_chart(state_df.set_index("State"))
+st.subheader("Settings")
+st.table(pd.DataFrame({"setting": list(view.settings), "value": [str(v) for v in view.settings.values()]}))
 
-with col_table:
-    st.subheader("Round Details")
-    display_df = df[["round", "state", "system_qber", "n_results", "aggregation"]].copy()
-    st.dataframe(display_df, use_container_width=True)
-
-# ---------------------------------------------------------------------------
-# QBER over rounds
-# ---------------------------------------------------------------------------
-
-st.divider()
-st.header("📈 QBER Over Rounds")
-
-if "system_qber" in df.columns:
-    qber_df = df[["round", "system_qber"]].copy()
-    qber_df = qber_df.set_index("round")
-    st.line_chart(qber_df)
-
-# Per-client QBER if available
-if "qber_per_client" in df.columns and df["qber_per_client"].notna().any():
-    st.subheader("Per-Client QBER")
-    qber_per = df["qber_per_client"].tolist()
-    if qber_per and isinstance(qber_per[0], dict):
-        qber_client_df = pd.DataFrame(qber_per)
-        qber_client_df["round"] = df["round"].values
-        qber_client_df = qber_client_df.set_index("round")
-        st.line_chart(qber_client_df)
-
-# ---------------------------------------------------------------------------
-# Metrics over rounds
-# ---------------------------------------------------------------------------
-
-st.divider()
-st.header("📉 Metrics Over Rounds")
-
-if "metrics" in df.columns and df["metrics"].notna().any():
-    metrics_list = df["metrics"].tolist()
-    if metrics_list and isinstance(metrics_list[0], dict):
-        metrics_df = pd.DataFrame(metrics_list)
-        metrics_df["round"] = df["round"].values
-        metrics_df = metrics_df.set_index("round")
-
-        numeric_cols = metrics_df.select_dtypes(include=["number"]).columns.tolist()
-        if numeric_cols:
-            selected = st.multiselect("Select metrics to plot", numeric_cols, default=numeric_cols[:3])
-            if selected:
-                st.line_chart(metrics_df[selected])
-        else:
-            st.info("No numeric metrics available for plotting.")
-
-# ---------------------------------------------------------------------------
-# Raw JSON
-# ---------------------------------------------------------------------------
-
-st.divider()
-st.header("📝 Raw JSON")
-with st.expander("Click to expand full JSON"):
-    st.json(data)
+with st.expander("All rounds"):
+    st.dataframe(view.rounds, use_container_width=True)

@@ -7,10 +7,10 @@ Navigation:
     - LIVE: BB84 / QBER Explorer
     - LIVE: 3-State Security Controller
     - LIVE: Crypto Pipeline Demo (AES-GCM real, CKKS/Groth16 STUB)
-    - STATIC: FL Results (reads results/fl_training_log.json)
+    - STATIC: Results explorer (the committed pilot record and any results JSON)
 
-The FL Results panel does NOT run training.
-It only reads the JSON exported by the Kaggle notebook / server.py.
+The Results explorer does NOT run training.
+It only reads recorded results (docs/validation) and the JSON written by server.py.
 
 Usage:
     streamlit run dashboard/app.py
@@ -38,17 +38,16 @@ These compute on-the-fly using the EveFL library:
 - **Security Controller** — See how QBER maps to SECURE / CAUTION / LOCKDOWN
 - **Crypto Pipeline** — AES-256-GCM live demo (CKKS & Groth16 are stubs)
 
-### 📊 FL RESULTS Panel
-Reads static experiment output only:
-- **FL Results** — Visualize `results/fl_training_log.json` without running training
+### 📊 RESULTS Panel
+Reads recorded experiment output only:
+- **Results explorer** — the single-seed pilot and any results JSON, with the label and caveats each was recorded with
 """)
 
 st.divider()
 
 st.info("""
 💡 **Tip:** Use the sidebar to navigate between pages.
-The FL Results page expects `results/fl_training_log.json` to exist
-(run the experiment first via `python scripts/run_experiments.py`).
+The Results explorer opens the committed pilot record by default; choose another results file, or upload one, in its sidebar.
 """)
 
 st.caption("EveFL — Privacy/security-aware federated learning for medical imaging.")

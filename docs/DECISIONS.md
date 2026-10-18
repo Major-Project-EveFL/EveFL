@@ -88,6 +88,7 @@ Dates are the merge or decision dates in git history where a file records them.
 | P3 | standing | Destructive steps (history rewrites, force pushes, deleting backups or old folders, deleting remote branches) happen only on an explicit instruction, after a backup and a shown verification | irreversibility | working agreement |
 | P4 | standing | Ask before adding a dependency or an improvement; pre-register selection rules in docs/06 before running anything | prevents fitting rules to results | CLAUDE.md |
 | P5 | 2026-10-15 | This file is the single index of decisions, results and limits for reviewers and funders; every decision or result adds one line to it in the same pull request, and a test fails if a cited path disappears | a funder will ask about every decision, architecture choice and result | `tests/test_decisions_log.py`, CLAUDE.md |
+| P6 | 2026-10-17 | A project tracker lists every roadmap item with a status (DONE, PARTIAL, TODO, WAITING, STRETCH), the evidence and what is left; a test keeps its counts and cited paths true | reviewers and funders ask what is finished and what is not, and the roadmap alone does not say | [PROJECT_TRACKER.md](PROJECT_TRACKER.md), `tests/test_project_tracker.py` |
 
 ## 4. Results to date
 | Result | Label | Value | File |

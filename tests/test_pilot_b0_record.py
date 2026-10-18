@@ -85,3 +85,14 @@ def test_timing_ratio_and_the_projection_statement():
     assert 1.1 < timing["measured_over_projected"] < 1.3
     assert timing["data_wait_share_from_round_2"] < 0.05 and timing["gpu0_mean_util_pct_all_samples"] > 90
     assert "low by roughly this factor" in timing["reading"]
+
+
+def test_the_transcription_is_recorded_as_verified_against_the_results_json():
+    record = _record()
+    verified = record["verified_against_results_json"]
+    assert re.fullmatch(r"[0-9a-f]{64}", verified["sha256"]) and verified["bytes"] > 1_000_000
+    assert verified["rounds_compared"] == 50 and verified["mismatches_at_4_decimals"] == 0
+    assert verified["per_class_mismatches_at_3_decimals"] == 0 and verified["config_hash_equal"] is True
+    assert abs(verified["primary_test_auc_exact"] - record["results"]["primary"]["test_auc_excl_thin"]) < 5e-5
+    assert abs(verified["elapsed_seconds_exact"] - record["timing"]["elapsed_seconds"]) < 0.1
+    assert "verified against the results JSON" in record["label"] and "verify them against" not in " ".join(record["caveats"])

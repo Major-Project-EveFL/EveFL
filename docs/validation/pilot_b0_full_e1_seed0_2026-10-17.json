@@ -1,0 +1,395 @@
+{
+  "label": "measured on Kaggle (2 x Tesla T4, one used), single-seed pilot of B0 (unsecured FedAvg), transcribed from the table and log printed by the pilot notebook; the results JSON (2.11 MB) stays on Kaggle and is not in the repository.",
+  "recorded_in_repo_on": "2026-10-18",
+  "defined_in": "docs/06_EXPERIMENT_PROTOCOL.md, 'Pre-registered: first full-data baseline pilot' (written 2026-10-17, before the run)",
+  "caveats": [
+    "Single-seed pilot with E = 1 local epoch (a recorded deviation from the E = 5 specification): it is not the paper baseline, has no confidence interval, ranks nothing, and may be quoted only as 'single-seed pilot, E = 1'.",
+    "GPU runs with the same seed are not bit-reproducible (docs/validation/image_cache_lite_run_2026-10-15.json), so a second run would give somewhat different numbers.",
+    "The test split was evaluated at rounds 5, 10, ..., 50 only. The AUC is the macro AUC over the 14 pathologies; no class was thin in the test split, while Hernia (10 positives) was thin in the validation split.",
+    "The per-round log lines were not saved to a file: the tee target directory did not exist when the run started. The values here come from the notebook's printed table; verify them against the results JSON when it is downloaded.",
+    "Numbers are for this split (patient-level, seed 42) and cannot be compared directly with published ChestX-ray14 results, which use other splits."
+  ],
+  "run": {
+    "name": "pilot_b0_full_e1_seed0",
+    "config_hash": "a3480560464bef2a",
+    "seed": 0,
+    "partition_seed": 42,
+    "num_rounds": 50,
+    "num_clients": 3,
+    "local_epochs": 1,
+    "batch_size": 32,
+    "image_size": 224,
+    "arithmetic": "fp32",
+    "pretrained": true,
+    "weights_sha256": "9803814b9183a8bdd46cd0c9cd178ec98b51de241084613e975f4fa54d9a57f2",
+    "image_backend": "uint8_cache",
+    "cache_sha256": "db497ea60fdc0f336ac94c3ff8d935bf755ddcb61ea567fa38fb3a01806a456f",
+    "evaluation": {
+      "federated_evaluate": false,
+      "test_eval_every": 5,
+      "val_eval_every": 1
+    },
+    "policy": "global",
+    "intercept_probability": 0.0,
+    "state_counts": {
+      "SECURE": 50
+    },
+    "failures": 0,
+    "rounds_discarded": 0,
+    "participation": {
+      "0": 50,
+      "1": 50,
+      "2": 50
+    },
+    "optimizer": {
+      "name": "adamw",
+      "lr": 0.001,
+      "schedule": "cosine_by_global_round",
+      "weight_decay": 0.01
+    },
+    "code_commit": "8b77cf8"
+  },
+  "environment": {
+    "python": "3.13.15",
+    "torch": "2.11.0+cu128",
+    "torchvision": "0.26.0+cu128",
+    "numpy": "2.1.3",
+    "Pillow": "12.3.0",
+    "device": "cuda: 2 x Tesla T4 (14912 MiB), GPU 0 used, cpu_count 4"
+  },
+  "checks_before_reading_any_auc": {
+    "state_counts_all_secure_and_no_failures": true,
+    "weights_hash_equals_preregistered": true,
+    "cache_hash_equals_preregistered": true,
+    "partition_counts_identical_to_audited_split": true,
+    "partition_index_hashes_equal_2026_10_04_record": true,
+    "val_auc_star_round_50_above_round_1": true
+  },
+  "rounds": [
+    {
+      "round": 1,
+      "val_loss": 0.1814,
+      "val_auc_excl_thin": 0.6624
+    },
+    {
+      "round": 2,
+      "val_loss": 0.1595,
+      "val_auc_excl_thin": 0.7579
+    },
+    {
+      "round": 3,
+      "val_loss": 0.1574,
+      "val_auc_excl_thin": 0.7674
+    },
+    {
+      "round": 4,
+      "val_loss": 0.1555,
+      "val_auc_excl_thin": 0.7798
+    },
+    {
+      "round": 5,
+      "val_loss": 0.1541,
+      "val_auc_excl_thin": 0.7827,
+      "test_loss": 0.1521,
+      "test_auc_excl_thin": 0.796
+    },
+    {
+      "round": 6,
+      "val_loss": 0.1527,
+      "val_auc_excl_thin": 0.7919
+    },
+    {
+      "round": 7,
+      "val_loss": 0.1522,
+      "val_auc_excl_thin": 0.7962
+    },
+    {
+      "round": 8,
+      "val_loss": 0.1516,
+      "val_auc_excl_thin": 0.7985
+    },
+    {
+      "round": 9,
+      "val_loss": 0.1506,
+      "val_auc_excl_thin": 0.8011
+    },
+    {
+      "round": 10,
+      "val_loss": 0.1491,
+      "val_auc_excl_thin": 0.8068,
+      "test_loss": 0.1468,
+      "test_auc_excl_thin": 0.8179
+    },
+    {
+      "round": 11,
+      "val_loss": 0.1489,
+      "val_auc_excl_thin": 0.8081
+    },
+    {
+      "round": 12,
+      "val_loss": 0.1485,
+      "val_auc_excl_thin": 0.8092
+    },
+    {
+      "round": 13,
+      "val_loss": 0.1484,
+      "val_auc_excl_thin": 0.8133
+    },
+    {
+      "round": 14,
+      "val_loss": 0.1478,
+      "val_auc_excl_thin": 0.8136
+    },
+    {
+      "round": 15,
+      "val_loss": 0.1477,
+      "val_auc_excl_thin": 0.8166,
+      "test_loss": 0.1457,
+      "test_auc_excl_thin": 0.8242
+    },
+    {
+      "round": 16,
+      "val_loss": 0.1478,
+      "val_auc_excl_thin": 0.8165
+    },
+    {
+      "round": 17,
+      "val_loss": 0.1481,
+      "val_auc_excl_thin": 0.8146
+    },
+    {
+      "round": 18,
+      "val_loss": 0.1472,
+      "val_auc_excl_thin": 0.8163
+    },
+    {
+      "round": 19,
+      "val_loss": 0.1462,
+      "val_auc_excl_thin": 0.8183
+    },
+    {
+      "round": 20,
+      "val_loss": 0.1467,
+      "val_auc_excl_thin": 0.82,
+      "test_loss": 0.1444,
+      "test_auc_excl_thin": 0.827
+    },
+    {
+      "round": 21,
+      "val_loss": 0.1458,
+      "val_auc_excl_thin": 0.8223
+    },
+    {
+      "round": 22,
+      "val_loss": 0.1464,
+      "val_auc_excl_thin": 0.8213
+    },
+    {
+      "round": 23,
+      "val_loss": 0.1462,
+      "val_auc_excl_thin": 0.8215
+    },
+    {
+      "round": 24,
+      "val_loss": 0.1462,
+      "val_auc_excl_thin": 0.8224
+    },
+    {
+      "round": 25,
+      "val_loss": 0.1462,
+      "val_auc_excl_thin": 0.822,
+      "test_loss": 0.1437,
+      "test_auc_excl_thin": 0.8316
+    },
+    {
+      "round": 26,
+      "val_loss": 0.1464,
+      "val_auc_excl_thin": 0.823
+    },
+    {
+      "round": 27,
+      "val_loss": 0.1464,
+      "val_auc_excl_thin": 0.8214
+    },
+    {
+      "round": 28,
+      "val_loss": 0.1465,
+      "val_auc_excl_thin": 0.8226
+    },
+    {
+      "round": 29,
+      "val_loss": 0.1466,
+      "val_auc_excl_thin": 0.8228
+    },
+    {
+      "round": 30,
+      "val_loss": 0.1473,
+      "val_auc_excl_thin": 0.8213,
+      "test_loss": 0.145,
+      "test_auc_excl_thin": 0.8296
+    },
+    {
+      "round": 31,
+      "val_loss": 0.1474,
+      "val_auc_excl_thin": 0.8213
+    },
+    {
+      "round": 32,
+      "val_loss": 0.1476,
+      "val_auc_excl_thin": 0.8228
+    },
+    {
+      "round": 33,
+      "val_loss": 0.1479,
+      "val_auc_excl_thin": 0.8196
+    },
+    {
+      "round": 34,
+      "val_loss": 0.1488,
+      "val_auc_excl_thin": 0.8181
+    },
+    {
+      "round": 35,
+      "val_loss": 0.1494,
+      "val_auc_excl_thin": 0.8172,
+      "test_loss": 0.1473,
+      "test_auc_excl_thin": 0.8249
+    },
+    {
+      "round": 36,
+      "val_loss": 0.15,
+      "val_auc_excl_thin": 0.8166
+    },
+    {
+      "round": 37,
+      "val_loss": 0.1503,
+      "val_auc_excl_thin": 0.8147
+    },
+    {
+      "round": 38,
+      "val_loss": 0.1511,
+      "val_auc_excl_thin": 0.8127
+    },
+    {
+      "round": 39,
+      "val_loss": 0.152,
+      "val_auc_excl_thin": 0.8123
+    },
+    {
+      "round": 40,
+      "val_loss": 0.1523,
+      "val_auc_excl_thin": 0.811,
+      "test_loss": 0.1504,
+      "test_auc_excl_thin": 0.817
+    },
+    {
+      "round": 41,
+      "val_loss": 0.1534,
+      "val_auc_excl_thin": 0.8107
+    },
+    {
+      "round": 42,
+      "val_loss": 0.1535,
+      "val_auc_excl_thin": 0.8091
+    },
+    {
+      "round": 43,
+      "val_loss": 0.1549,
+      "val_auc_excl_thin": 0.8074
+    },
+    {
+      "round": 44,
+      "val_loss": 0.1548,
+      "val_auc_excl_thin": 0.8059
+    },
+    {
+      "round": 45,
+      "val_loss": 0.1555,
+      "val_auc_excl_thin": 0.8057,
+      "test_loss": 0.1538,
+      "test_auc_excl_thin": 0.8119
+    },
+    {
+      "round": 46,
+      "val_loss": 0.1561,
+      "val_auc_excl_thin": 0.8047
+    },
+    {
+      "round": 47,
+      "val_loss": 0.1565,
+      "val_auc_excl_thin": 0.8041
+    },
+    {
+      "round": 48,
+      "val_loss": 0.1578,
+      "val_auc_excl_thin": 0.8036
+    },
+    {
+      "round": 49,
+      "val_loss": 0.1587,
+      "val_auc_excl_thin": 0.8035
+    },
+    {
+      "round": 50,
+      "val_loss": 0.1597,
+      "val_auc_excl_thin": 0.803,
+      "test_loss": 0.1583,
+      "test_auc_excl_thin": 0.8086
+    }
+  ],
+  "results": {
+    "primary": {
+      "definition": "test macro AUC over non-thin classes at round 50, no selection",
+      "round": 50,
+      "test_auc_excl_thin": 0.8086,
+      "test_loss": 0.1583
+    },
+    "secondary": {
+      "definition": "among the ten test-evaluated rounds, the round with the highest validation AUC* (ties to the later round)",
+      "round": 25,
+      "val_auc_excl_thin": 0.822,
+      "test_auc_excl_thin": 0.8316,
+      "test_loss": 0.1437
+    },
+    "per_class_test_auc_round_50": {
+      "Atelectasis": 0.788,
+      "Cardiomegaly": 0.905,
+      "Effusion": 0.872,
+      "Infiltration": 0.691,
+      "Mass": 0.838,
+      "Nodule": 0.731,
+      "Pneumonia": 0.694,
+      "Pneumothorax": 0.831,
+      "Consolidation": 0.806,
+      "Edema": 0.896,
+      "Emphysema": 0.87,
+      "Fibrosis": 0.789,
+      "Pleural_Thickening": 0.757,
+      "Hernia": 0.852
+    },
+    "thin_classes_in_test_at_round_50": []
+  },
+  "observations": {
+    "best_validation_auc_round": 26,
+    "best_validation_auc": 0.823,
+    "final_validation_auc": 0.803,
+    "validation_auc_drop_peak_to_final": 0.02,
+    "min_validation_loss_round": 21,
+    "min_validation_loss": 0.1458,
+    "final_validation_loss": 0.1597,
+    "reading": "Validation AUC rises to a peak around round 26 and then declines slowly while validation loss rises, under a cosine schedule over 50 rounds. This is one seed. That fewer rounds would suffice is a hypothesis to test, not a result."
+  },
+  "timing": {
+    "elapsed_seconds": 16077.7,
+    "projected_seconds": 13680.0,
+    "measured_over_projected": 1.175,
+    "notebook_wall_seconds_all_cells": 17009.7,
+    "seconds_per_round_about": 321.6,
+    "fit_images_per_s": 292.6,
+    "server_eval_val_images_per_s": 969.8,
+    "server_eval_test_images_per_s": 966.1,
+    "data_wait_share_from_round_2": 0.0287,
+    "gpu0_mean_util_pct_all_samples": 96,
+    "reading": "The run took 17.5% longer than the 3.8 h projection, which assumed the lite-run compute rate of 342 images/s; the delivered full-data fit rate was 293 images/s with the loader no longer the limit (data wait 3%, GPU 0 at 96%). Projections in docs/06 for other profiles are low by roughly this factor until corrected."
+  }
+}

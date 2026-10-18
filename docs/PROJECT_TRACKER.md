@@ -1,6 +1,6 @@
 # EveFL project tracker
 
-What is done, what is left, and what each item is waiting on. Last updated: 2026-10-17. The decisions behind these items are in
+What is done, what is left, and what each item is waiting on. Last updated: 2026-10-18. The decisions behind these items are in
 [DECISIONS.md](DECISIONS.md); the phase definitions and acceptance criteria are in [05_ROADMAP.md](05_ROADMAP.md); the
 authority for each audited bug is [04_KNOWN_ISSUES.md](04_KNOWN_ISSUES.md).
 
@@ -9,7 +9,7 @@ Status words: **DONE** (code, a passing test and, for numbers, a result file exi
 core claim). Sizes are relative effort, not dates: S = a day or less, M = a few days, L = a week or more, C = compute-bound
 (hours on a GPU, not hours of typing).
 
-Counts: DONE 16, PARTIAL 6, TODO 27, WAITING 5, STRETCH 4 (58 items)
+Counts: DONE 17, PARTIAL 6, TODO 27, WAITING 5, STRETCH 4 (59 items)
 
 ## Phase 0: stabilise
 | ID | Item | Status | Evidence / what is left |
@@ -45,7 +45,7 @@ Counts: DONE 16, PARTIAL 6, TODO 27, WAITING 5, STRETCH 4 (58 items)
 |---|---|---|---|
 | 3.1 | Patient-level split verified on the real metadata; server-side AUC evaluation; robust screening; configurable epochs and optimiser; pretrained init | DONE | `docs/validation/partition_audit_real.json` |
 | 3.2 | Profiling instrumentation and the uint8 image cache (11.9x faster lite run) | DONE | `docs/validation/image_cache_build_2026-10-12.json`, `docs/validation/image_cache_lite_run_2026-10-15.json` |
-| 3.3 | First measured accuracy: single-seed pilot of B0 (pre-registered) | WAITING | C (about 4 h): run the Kaggle cells P1 to P6 and paste the output |
+| 3.3 | First measured accuracy: single-seed pilot of B0 (pre-registered), test macro AUC 0.8086 at round 50, E = 1 | DONE | `docs/validation/pilot_b0_full_e1_seed0_2026-10-17.json`; a single seed, not the baseline |
 | 3.4 | Measured baseline: unsecured FedAvg, at least 3 seeds, mean and 95% CI, with config hash | TODO | C: needs a decision on the profile (epochs, data fraction) |
 | 3.5 | Checkpoint saving (the runner writes results only at the end and saves no model) | TODO | S/M: needed for resuming a long run and for any inference demo |
 
@@ -75,6 +75,7 @@ Counts: DONE 16, PARTIAL 6, TODO 27, WAITING 5, STRETCH 4 (58 items)
 | 5.6 | Membership-inference measurement on our own models | TODO | M, C |
 | 5.7 | `evefl report`: every table and figure regenerated from result files | TODO | M |
 | 5.8 | Every number in the paper traces to a result file and config hash | TODO | follows 5.4 to 5.7 |
+| 5.9 | Decide the number of rounds for sweep runs (the pilot's validation AUC peaked at round 26 of 50; one seed, a hypothesis) | WAITING | decision by the project lead; a short run at 25 rounds would test it |
 
 ## Phase 6: productisation and demo
 | ID | Item | Status | Evidence / what is left |

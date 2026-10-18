@@ -472,6 +472,7 @@ assert meta["audit"]["ok"], "STOP: partition overlap"
 5. **The pilot** (about 4 h; the log is also saved):
 ```python
 %cd /kaggle/temp/EveFL
+!mkdir -p /kaggle/working/results
 !python -m evefl.fl.server \
     --data-root {DATA} --partition-root /kaggle/working/partitions_full \
     --num-rounds 50 --local-epochs 1 --batch-size 32 --seed 0 \

@@ -407,3 +407,19 @@ tuned away).
 **If the run dies** (session limit, crash): the per-round lines in the saved log are kept and reported as an incomplete run; the
 same settings are run again. Nothing is resumed from a partial state because the runner has no checkpoint (a known limit).
 **Deviations** from this rule are listed in this file with the reason and the date, as for the sweeps above.
+
+### Outcome of the baseline pilot (recorded 2026-10-18)
+Evidence: `docs/validation/pilot_b0_full_e1_seed0_2026-10-17.json`. A single-seed pilot of B0 (unsecured FedAvg), full data, 3
+hospitals, partition seed 42, run seed 0, 224 px, **E = 1**, 50 rounds, fp32, cache backend. It is not the paper baseline.
+- **Checks passed before any AUC was read:** all 50 rounds SECURE with no failures; the weights, cache and full-partition index
+  hashes equal the pre-registered values; the validation AUC over non-thin classes is higher at round 50 than at round 1.
+- **Primary result (no selection): test macro AUC over non-thin classes at round 50 = 0.8086** (no class was thin in the test
+  split). **Secondary:** the test-evaluated round with the highest validation AUC is round 25, test AUC 0.8316.
+- **Observed, one seed:** the validation AUC peaked at round 26 (0.8230) and fell by 0.020 to round 50 while the validation loss
+  rose from 0.1458 (round 21) to 0.1597. That fewer rounds would suffice is a hypothesis to test, not a result.
+- **Time:** 16,078 s (4.47 h) against the projected 3.8 h: 17.5% longer. The delivered fit rate was 293 images/s with the loader no
+  longer the limit (data wait 3%, GPU 0 at 96%), against 342 images/s assumed from the lite run. The hours in the projection tables
+  above are therefore low by roughly 17% until corrected.
+- **Deviation recorded:** the per-round log was not also written to a file (the output directory did not exist when `tee`
+  started); the per-round table printed by the notebook is the source, to be checked against the results JSON. The runbook cell now
+  creates the directory first.

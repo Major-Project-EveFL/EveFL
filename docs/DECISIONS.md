@@ -1,7 +1,7 @@
 # EveFL: decisions, architecture, results and limits
 
 A single place to answer "what did you decide, why, and what is the evidence". It is a living log: a change that decides
-something, or a result that arrives, adds a line here in the same pull request. Last reviewed: 2026-10-17.
+something, or a result that arrives, adds a line here in the same pull request. Last reviewed: 2026-10-18.
 
 How to read it
 - **Evidence** points to a file in this repository. "Decided in chat" means the project lead decided it in conversation and no
@@ -18,7 +18,8 @@ quantum-key-distribution link** per hospital supplies two things: a QBER reading
 (SECURE / CAUTION / LOCKDOWN) deciding whether a hospital's update is used, and key material that protects the update on the
 wire. The quantum layer is a simulator: the keys are seed-determined and **not secret**, and nothing here has been measured on
 QKD hardware. The project is a research prototype with tests and recorded results; it is not a certified or deployed system.
-**No model-accuracy baseline has been produced yet**; the lite runs are pipeline checks.
+**No model-accuracy baseline has been produced yet** (there is one single-seed pilot at one local epoch); the lite runs are
+pipeline checks.
 
 ## 2. Architecture at a glance
 | Layer | What it does | Status | Evidence |
@@ -103,6 +104,7 @@ Dates are the merge or decision dates in git history where a file records them.
 | Image cache build and verification | measured, Kaggle CPU | 112,120 images, 0 failures, 7.36 GB, 22.3 min, 0 pixel mismatches on 1,517 rows including all 519 RGBA sources; `cache_sha256` `db497ea6...` | `image_cache_build_2026-10-12.json` |
 | Same lite run, cache against PNG | measured, Kaggle GPU, pipeline check | 78 s against 936 s; data wait 0.048 from round 2 against 0.92; GPU utilisation in the fit phase 94% against 16% | `image_cache_lite_run_2026-10-15.json` |
 | Run-to-run variation, 3 cache-backend runs with the same seed | measured, Kaggle GPU, pipeline check | largest per-round spread: validation loss 0.0040, test loss 0.0034, validation macro AUC (non-thin) 0.141, test 0.098; the cache-versus-PNG differences are of the same size, and the PNG values fall inside the cache runs' range in 9 of 20 comparisons | `image_cache_lite_run_2026-10-15.json` (`run_to_run_variation`) |
+| First full-data B0 pilot: single seed, E = 1, fp32, cache backend, 50 rounds | measured, Kaggle GPU, single-seed pilot (not a baseline) | test macro AUC **0.8086** at round 50 (primary, no selection); 0.8316 at the validation-selected round 25 (secondary); validation AUC peaked at round 26 and fell by 0.020 by round 50; 16,078 s, 17.5% above the projection | `pilot_b0_full_e1_seed0_2026-10-17.json` |
 | Compute-only throughput of ResNet-18 on synthetic tensors, batch 32, one GPU | measured, Kaggle, one run per cell | 224 px training: fp32 362 img/s, `channels_last` 287, AMP 721, AMP + `channels_last` 962 (2.66x); 128 px fp32 941 (2.60x the 224 px rate, not the 3.06x assumed); peak memory 897 to 563 MiB with AMP | `compute_benchmark_2026-10-15.json` |
 
 Observed but not yet recorded in a result file: a second independent cache build produced the same `cache_sha256`; folder-scan
@@ -113,7 +115,8 @@ From the measured lite-run compute rates (342 images/s training, fp32, one T4) a
 compute benchmark; model in docs/06 (50 rounds, loader not limiting, one GPU). One full-data run at 224 px and 5 local
 epochs is about 18 h in fp32; about 7 h with AMP and `channels_last` (throughput only, learning effect not measured). A 36-run
 headline set at that profile is far beyond a few weeks of Kaggle quota, which is why a reduced profile for sweeps is planned.
-The full table is in docs/06; the benchmark is `docs/validation/compute_benchmark_2026-10-15.json`. The measured 128 px ratio
+The 2026-10-17 pilot took 17.5% longer than the projection for its profile (16,078 s against 13,680 s), so the hours here are low
+by roughly that factor. The full table is in docs/06; the benchmark is `docs/validation/compute_benchmark_2026-10-15.json`. The measured 128 px ratio
 (2.60x, not 3.06x) corrected the earlier 128 px hours upwards by about 15%.
 
 ## 6. What we do not claim
@@ -133,7 +136,8 @@ The full table is in docs/06; the benchmark is `docs/validation/compute_benchmar
   anomalies in CAUTION is unavailable (each round log says `screening: unavailable_secagg`), and **the Groth16 Byzantine claim is
   not supported:** the circuit is a test-size n = 8 and is not bound to the submitted update (the redesign is the last item of
   Phase 4). The only server-side defence in secure mode is the aggregate-norm check, with the limits listed above.
-- No accuracy baseline, no membership-inference result and no overhead table exist yet; Section VIII numbers of the paper draft are projected.
+- The only accuracy figure is a single-seed pilot at one local epoch (test macro AUC 0.8086); there is no baseline with seeds and
+  confidence intervals, no membership-inference result and no overhead table exist yet; Section VIII numbers of the paper draft are projected.
 - The 5-hospital run is five disjoint patient-level partitions of one dataset, not five institutions.
 - Novelty rests on prior work cited as QKDFL and FedSec; both citations still have to be verified by DOI (docs/01).
 - No clinical validation and no regulatory claim of any kind.
@@ -142,7 +146,8 @@ The full table is in docs/06; the benchmark is `docs/validation/compute_benchmar
 | Item | Owner | State |
 |---|---|---|
 | SecureAggregator step 2 (primitives, seed provider, aggregator; ADR 0003 tests 1 to 3, 8, 10 to 17) | engineering | plan approved 2026-10-16 (S13); 2a in progress |
-| First full-data baseline pilot (B0, seed 0, E = 1, fp32, cache backend) | engineering writes cells, project lead runs on Kaggle | pre-registered 2026-10-17 (M9); not yet run |
+| First full-data baseline pilot (B0, seed 0, E = 1, fp32, cache backend) | engineering and project lead | done: run 2026-10-17, result recorded 2026-10-18 (section 4) |
+| Number of rounds for the sweep profile (the pilot's validation AUC peaked at round 26 of 50; one seed) | project lead | open |
 | Wire AMP and `channels_last` into training behind flags, then measure the learning effect against the run-to-run spread | project lead | awaiting a decision |
 | Reduced profile for sweeps (25% of patients, 1 epoch); whether to define a 128 px pipeline and cache | project lead | proposed |
 | How many full-profile headline runs and which epochs | project lead | open |
@@ -158,8 +163,10 @@ are not yet verified.
 **Is the quantum part real?** It is a simulator behind an interface designed so a real key-delivery system (ETSI GS QKD 014)
 could replace it. No hardware has been used and the simulated keys are not secret.
 
-**What accuracy do you get?** None reported yet. The lite runs (5% of patients, 1 epoch, 5 rounds) check the pipeline and are not
-a baseline. The protocol produces mean and 95% CI over at least 3 seeds (docs/06).
+**What accuracy do you get?** One measured figure, labelled a single-seed pilot: unsecured FedAvg across 3 simulated hospitals, full
+data, one local epoch per round, 50 rounds, test macro AUC 0.8086 over the 14 pathologies (patient-level split, one seed, no
+confidence interval). It is not the paper baseline and cannot be compared directly with published ChestX-ray14 numbers, which use
+other splits. The protocol produces mean and 95% CI over at least 3 seeds (docs/06); the lite runs only check the pipeline.
 
 **Could patient data leak between your train and test sets?** The split is by patient and was audited on the real metadata with
 every overlap 0 (`partition_audit_real.json`). The earlier image-level split did leak, which is why it was replaced (docs/04 P0-4).

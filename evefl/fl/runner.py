@@ -209,6 +209,7 @@ def run_sequential_fl(
     timeout: Optional[float] = None,
     run_federated_evaluate: bool = True,
     clock_start: Optional[float] = None,
+    on_round_end: Optional[Callable[[int, Parameters, Optional[Tuple[float, Dict[str, object]]]], None]] = None,
 ) -> Tuple[Parameters, SequentialHistory]:
     """
     Drive `num_rounds` of federated learning with no Ray, no
@@ -221,6 +222,9 @@ def run_sequential_fl(
 
     `clock_start` is the `time.perf_counter()` value that round timing is measured from (so GPU samples taken on the same
     clock line up with the phases); default: the moment this function starts.
+
+    `on_round_end(server_round, current_parameters, validation_result)` is called once per round after the round's timing is
+    recorded (so it is outside every timed phase). `validation_result` is `(loss, metrics)` or None. Used for checkpoints.
 
     Returns:
         (final_parameters, history)
@@ -328,6 +332,8 @@ def run_sequential_fl(
             "t_start": round_t0 - clock_start, "t_end": round_t1 - clock_start, "round_s": round_t1 - round_t0,
             "phases": phases,
         })
+        if on_round_end is not None:
+            on_round_end(server_round, current_parameters, val_eval)
 
     log.info(
         "Sequential FL run complete: %d round(s), %d failure(s).",

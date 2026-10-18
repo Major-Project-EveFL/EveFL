@@ -423,3 +423,36 @@ hospitals, partition seed 42, run seed 0, 224 px, **E = 1**, 50 rounds, fp32, ca
 - **Deviation recorded:** the per-round log was not also written to a file (the output directory did not exist when `tee`
   started); the per-round table printed by the notebook is the source, to be checked against the results JSON. The runbook cell now
   creates the directory first.
+
+## Pre-registered: second single-seed run with checkpoints (seed 1), before the run exists
+Written 2026-10-18, before this run exists and before any test number from it has been seen. It repeats the pilot above with **run
+seed 1** and with `--save-model`; nothing else changes. It is a **second single-seed run**: two runs give a range, not a confidence
+interval, and no claim of significance is made from them.
+
+**Settings.** Exactly those of the pilot (full data, 3 hospitals, partition seed 42, 224 px, E = 1, 50 rounds, batch size 32,
+fp32, `uint8_cache` backend with the same `cache_sha256`, same weights file, validation every round, test every 5 rounds and the
+last, no attack) with `--seed 1` and `--save-model /kaggle/working/checkpoints`. The E = 1 deviation from the E = 5 specification
+stands, for the same compute reason. Saving does not change what is trained or the config hash apart from the run seed.
+
+**Purpose.** (i) A second full-scale sample, to see how far two seeds differ in this setting, next to the pilot. (ii) The model for
+the demonstration page.
+
+**Decided now, before any test number from this run is seen.** The demonstration page serves the **best-validation checkpoint**
+(`pilot_b0_full_e1_seed1_best_val.pt`): the round with the highest validation macro AUC over non-thin classes, ties to the later
+round, chosen from validation results only. The final-round checkpoint is kept but is not the one served. If the best-validation
+round is not one of the test-evaluated rounds, its test AUC is obtained afterwards by evaluating that checkpoint once on the test
+split; that number is reported as the demonstration model's test AUC and is not used to choose anything.
+
+**Reported (all of it, whatever the values).** The same items as the pilot: per-round validation loss and `val_AUC*`; test results
+at rounds 5, 10, ..., 50; the primary result (test AUC over non-thin classes at round 50, no selection) and the secondary one
+(highest validation `val_AUC*` among the test-evaluated rounds); per-class test AUC at round 50; elapsed time next to the pilot's
+16,078 s. In addition: the checkpoint manifest (rounds, SHA-256, sizes), and a side-by-side with the pilot that lists the
+differences without a significance statement.
+
+**Checks before any AUC is read:** all 50 rounds SECURE, no failures; the weights, cache and partition hashes equal the pilot's;
+`val_AUC*` at round 50 above round 1; both checkpoint files exist, their SHA-256 values equal the manifest and they load with
+`torch.load(..., weights_only=True)` into a ResNet-18. A failed check is reported, the run is not re-tuned.
+
+**If the run dies**, the per-round log saved by this run (the results directory is now created before `tee`) is kept and reported
+as an incomplete run, and the run is repeated with the same settings. The runner has no resume, a known limit.
+**Deviations** from this rule are listed in this file with the reason and the date, as for the sweeps above.

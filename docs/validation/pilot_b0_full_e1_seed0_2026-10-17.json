@@ -1,12 +1,12 @@
 {
-  "label": "measured on Kaggle (2 x Tesla T4, one used), single-seed pilot of B0 (unsecured FedAvg), transcribed from the table and log printed by the pilot notebook; the results JSON (2.11 MB) stays on Kaggle and is not in the repository.",
+  "label": "measured on Kaggle (2 x Tesla T4, one used), single-seed pilot of B0 (unsecured FedAvg). Values were transcribed from the table printed by the pilot notebook and verified against the results JSON on 2026-10-18; that file (1.26 MB) is kept locally in results/kaggle (git-ignored) and is not in the repository.",
   "recorded_in_repo_on": "2026-10-18",
   "defined_in": "docs/06_EXPERIMENT_PROTOCOL.md, 'Pre-registered: first full-data baseline pilot' (written 2026-10-17, before the run)",
   "caveats": [
     "Single-seed pilot with E = 1 local epoch (a recorded deviation from the E = 5 specification): it is not the paper baseline, has no confidence interval, ranks nothing, and may be quoted only as 'single-seed pilot, E = 1'.",
     "GPU runs with the same seed are not bit-reproducible (docs/validation/image_cache_lite_run_2026-10-15.json), so a second run would give somewhat different numbers.",
     "The test split was evaluated at rounds 5, 10, ..., 50 only. The AUC is the macro AUC over the 14 pathologies; no class was thin in the test split, while Hernia (10 positives) was thin in the validation split.",
-    "The per-round log lines were not saved to a file: the tee target directory did not exist when the run started. The values here come from the notebook's printed table; verify them against the results JSON when it is downloaded.",
+    "The per-round log lines were not saved to a text file: the tee target directory did not exist when the run started (fixed in the runbook). The results JSON itself was saved and is the source of the verification below.",
     "Numbers are for this split (patient-level, seed 42) and cannot be compared directly with published ChestX-ray14 results, which use other splits."
   ],
   "run": {
@@ -56,6 +56,20 @@
     "numpy": "2.1.3",
     "Pillow": "12.3.0",
     "device": "cuda: 2 x Tesla T4 (14912 MiB), GPU 0 used, cpu_count 4"
+  },
+  "verified_against_results_json": {
+    "date": "2026-10-18",
+    "file": "pilot_b0_full_e1_seed0.json",
+    "sha256": "6b087664f5aafcebf104461e45603613b55ba379e65cdfbf88b2b9d0a7cb3aa5",
+    "bytes": 1264764,
+    "rounds_compared": 50,
+    "mismatches_at_4_decimals": 0,
+    "per_class_mismatches_at_3_decimals": 0,
+    "config_hash_equal": true,
+    "weights_and_cache_hashes_equal": true,
+    "elapsed_seconds_exact": 16077.680867884,
+    "primary_test_auc_exact": 0.8085872122980983,
+    "note": "the file was first saved with a .txt extension by mistake; its content is unchanged"
   },
   "checks_before_reading_any_auc": {
     "state_counts_all_secure_and_no_failures": true,

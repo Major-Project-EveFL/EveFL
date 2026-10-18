@@ -9,7 +9,7 @@ Status words: **DONE** (code, a passing test and, for numbers, a result file exi
 core claim). Sizes are relative effort, not dates: S = a day or less, M = a few days, L = a week or more, C = compute-bound
 (hours on a GPU, not hours of typing).
 
-Counts: DONE 18, PARTIAL 6, TODO 28, WAITING 6, STRETCH 4 (62 items)
+Counts: DONE 18, PARTIAL 7, TODO 27, WAITING 6, STRETCH 4 (62 items)
 
 ## Phase 0: stabilise
 | ID | Item | Status | Evidence / what is left |
@@ -48,7 +48,7 @@ Counts: DONE 18, PARTIAL 6, TODO 28, WAITING 6, STRETCH 4 (62 items)
 | 3.3 | First measured accuracy: single-seed pilot of B0 (pre-registered), test macro AUC 0.8086 at round 50, E = 1 | DONE | `docs/validation/pilot_b0_full_e1_seed0_2026-10-17.json`; a single seed, not the baseline |
 | 3.4 | Measured baseline: unsecured FedAvg, at least 3 seeds, mean and 95% CI, with config hash | TODO | C: needs a decision on the profile (epochs, data fraction) |
 | 3.6 | Second single-seed run with checkpoints (seed 1), pre-registered | WAITING | C (about 4.5 h): run the cells in `docs/KAGGLE_RUNBOOK.md`; paste the output |
-| 3.5 | Checkpoint saving (the runner writes results only at the end and saves no model) | TODO | S/M: needed for resuming a long run and for any inference demo |
+| 3.5 | Checkpoint saving (`--save-model`: final and best-validation checkpoints); resume of a long run is still missing | PARTIAL | `evefl/fl/checkpoint.py`, `tests/test_checkpoint.py`; no resume |
 
 ## Phase 4: crypto integration
 | ID | Item | Status | Evidence / what is left |

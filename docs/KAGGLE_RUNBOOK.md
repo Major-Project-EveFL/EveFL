@@ -551,7 +551,28 @@ for key in ("final", "best_validation"):
     payload = torch.load(path, weights_only=True)
     print(key, "sha256 matches manifest:", ok, "| loads with weights_only:", len(payload["state_dict"]), "tensors, round", payload["round"])
 ```
-Download from the notebook's **Output** tab: use **Download all** (the whole output is about 95 MB: results, log, two checkpoints) and
+7. **Score the best-validation checkpoint once on the test split** (the pre-registered step: the checkpoint was chosen by validation,
+   its test AUC is obtained here and selects nothing):
+```python
+%cd /kaggle/temp/EveFL
+import json
+m = json.load(open("/kaggle/working/results/pilot_b0_full_e1_seed1.json"))["experiment"]["checkpoints"]
+BEST = "/kaggle/working/checkpoints/" + m["best_validation"]["file"]
+!python scripts/eval_checkpoint.py --checkpoint {BEST} --data-root {DATA} --partition-root /kaggle/working/partitions_full \
+    --image-backend uint8_cache --image-cache-root {CACHE} --output /kaggle/working/results/eval_best_val_seed1.json
+print(json.dumps(json.load(open("/kaggle/working/results/eval_best_val_seed1.json"))["checkpoint"], indent=1))
+```
+8. **Export a few public test-split images for the demonstration page** (seeded; they stay out of git):
+```python
+%cd /kaggle/temp/EveFL
+!python scripts/export_demo_samples.py --data-root {DATA} --partition-root /kaggle/working/partitions_full \
+    --output /kaggle/working/demo_samples --n 12 --seed 0
+!ls -la /kaggle/working/demo_samples
+```
+After downloading, put the two `.pt` files in `checkpoints/` and the exported folder in `demo_samples/` (both git-ignored); the
+"Try the model" page finds them there.
+
+Download from the notebook's **Output** tab: use **Download all** (the whole output is about 110 MB: results, log, two checkpoints, samples) and
 unzip it into `results/kaggle/` (checkpoints go into `checkpoints/`; both folders are git-ignored). Clicking a single `.json` link
 opens it in the browser instead of downloading it; right-click the link and choose "Save link as", or use Download all.
 

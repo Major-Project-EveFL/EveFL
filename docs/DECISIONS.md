@@ -69,6 +69,7 @@ Dates are the merge or decision dates in git history where a file records them.
 | M8 | standing | Every number in the paper traces to a result file with a config hash and seeds; otherwise it is labelled projected or removed | honesty rule | CLAUDE.md rule 6, docs/06 |
 | M9 | 2026-10-17 | The first full-data baseline is a **single-seed pilot** of B0 (unsecured FedAvg): full data, partition seed 42, run seed 0, 224 px, fp32, cache backend, 50 rounds, validation every round, test every 5 rounds and last; **E = 1, a recorded deviation from the E = 5 specification** because E = 5 is projected at about 18 h per run against about 3.8 h; the primary result is the round-50 test AUC with no selection | the first measured accuracy figure and a full-scale check of the compute projection, without spending quota on a configuration that cannot be repeated for several seeds | E = 5 pilot; AMP in the pilot (learning effect not yet measured) | docs/06 (pre-registered 2026-10-17) |
 | M10 | 2026-10-18 | A second single-seed run of the pilot with run seed 1 and `--save-model` (everything else identical); the demonstration page will serve its **best-validation checkpoint**, decided before any test number from this run is seen; two runs give a range, not a confidence interval | a second full-scale sample, and a model for the upload page whose choice cannot be influenced by test results | serving the final-round model; choosing the checkpoint by test AUC | docs/06 (pre-registered 2026-10-18) |
+| M11 | 2026-10-24 | The demonstration page serves the **round-27 best-validation checkpoint** of the seed-1 run, as decided on 2026-10-18 before any test number from that run was seen; its test macro AUC, **0.8301**, comes from one separate evaluation of that checkpoint on the test split and selects nothing; the final-round checkpoint is kept but not served | the served model's choice cannot be influenced by test results, and the number shown next to it is honest about how it was obtained | serving the final round; choosing the checkpoint by test AUC; quoting 0.8301 as a baseline | `docs/validation/pilot_b0_full_e1_seed1_2026-10-24.json`, docs/06 (outcome recorded 2026-10-24) |
 
 ### Engineering and performance
 | ID | Date | Decision | Why | Evidence |
@@ -111,6 +112,7 @@ Dates are the merge or decision dates in git history where a file records them.
 | Same lite run, cache against PNG | measured, Kaggle GPU, pipeline check | 78 s against 936 s; data wait 0.048 from round 2 against 0.92; GPU utilisation in the fit phase 94% against 16% | `image_cache_lite_run_2026-10-15.json` |
 | Run-to-run variation, 3 cache-backend runs with the same seed | measured, Kaggle GPU, pipeline check | largest per-round spread: validation loss 0.0040, test loss 0.0034, validation macro AUC (non-thin) 0.141, test 0.098; the cache-versus-PNG differences are of the same size, and the PNG values fall inside the cache runs' range in 9 of 20 comparisons | `image_cache_lite_run_2026-10-15.json` (`run_to_run_variation`) |
 | First full-data B0 pilot: single seed, E = 1, fp32, cache backend, 50 rounds | measured, Kaggle GPU, single-seed pilot (not a baseline) | test macro AUC **0.8086** at round 50 (primary, no selection); 0.8316 at the validation-selected round 25 (secondary); validation AUC peaked at round 26 and fell by 0.020 by round 50; 16,078 s, 17.5% above the projection | `pilot_b0_full_e1_seed0_2026-10-17.json` |
+| Second single-seed run (seed 1), same settings, with checkpoints | measured, Kaggle GPU, single-seed run (not a baseline) | test macro AUC **0.8114** at round 50 (primary, no selection); 0.8299 at the validation-selected tested round 30 (secondary); the best-validation checkpoint (round 27) scores **0.8301** in one separate test evaluation; test AUC at the ten tested rounds is within 0.0036 of the pilot's; validation peaked at round 27 and fell by 0.018 by round 50; 14,485 s | `docs/validation/pilot_b0_full_e1_seed1_2026-10-24.json` |
 | Compute-only throughput of ResNet-18 on synthetic tensors, batch 32, one GPU | measured, Kaggle, one run per cell | 224 px training: fp32 362 img/s, `channels_last` 287, AMP 721, AMP + `channels_last` 962 (2.66x); 128 px fp32 941 (2.60x the 224 px rate, not the 3.06x assumed); peak memory 897 to 563 MiB with AMP | `compute_benchmark_2026-10-15.json` |
 
 Observed but not yet recorded in a result file: a second independent cache build produced the same `cache_sha256`; folder-scan
@@ -121,8 +123,8 @@ From the measured lite-run compute rates (342 images/s training, fp32, one T4) a
 compute benchmark; model in docs/06 (50 rounds, loader not limiting, one GPU). One full-data run at 224 px and 5 local
 epochs is about 18 h in fp32; about 7 h with AMP and `channels_last` (throughput only, learning effect not measured). A 36-run
 headline set at that profile is far beyond a few weeks of Kaggle quota, which is why a reduced profile for sweeps is planned.
-The 2026-10-17 pilot took 17.5% longer than the projection for its profile (16,078 s against 13,680 s), so the hours here are low
-by roughly that factor. The full table is in docs/06; the benchmark is `docs/validation/compute_benchmark_2026-10-15.json`. The measured 128 px ratio
+The two full-data runs took 17.5% and 5.9% longer than the projection for their profile (16,078 s and 14,485 s against 13,680 s), so the
+hours here are low by roughly 6 to 18%. The full table is in docs/06; the benchmark is `docs/validation/compute_benchmark_2026-10-15.json`. The measured 128 px ratio
 (2.60x, not 3.06x) corrected the earlier 128 px hours upwards by about 15%.
 
 ## 6. What we do not claim
@@ -142,7 +144,7 @@ by roughly that factor. The full table is in docs/06; the benchmark is `docs/val
   anomalies in CAUTION is unavailable (each round log says `screening: unavailable_secagg`), and **the Groth16 Byzantine claim is
   not supported:** the circuit is a test-size n = 8 and is not bound to the submitted update (the redesign is the last item of
   Phase 4). The only server-side defence in secure mode is the aggregate-norm check, with the limits listed above.
-- The only accuracy figure is a single-seed pilot at one local epoch (test macro AUC 0.8086); there is no baseline with seeds and
+- The only accuracy figures are two single-seed runs at one local epoch (test macro AUC at round 50: 0.8086 and 0.8114); there is no baseline with seeds and
   confidence intervals, no membership-inference result and no overhead table exist yet; Section VIII numbers of the paper draft are projected.
 - The 5-hospital run is five disjoint patient-level partitions of one dataset, not five institutions.
 - Novelty rests on prior work cited as QKDFL and FedSec; both citations still have to be verified by DOI (docs/01).
@@ -153,7 +155,7 @@ by roughly that factor. The full table is in docs/06; the benchmark is `docs/val
 |---|---|---|
 | SecureAggregator step 2 (primitives, seed provider, aggregator; ADR 0003 tests 1 to 3, 8, 10 to 17) | engineering | plan approved 2026-10-16 (S13); 2a in progress |
 | First full-data baseline pilot (B0, seed 0, E = 1, fp32, cache backend) | engineering and project lead | done: run 2026-10-17, result recorded 2026-10-18 (section 4) |
-| Second single-seed run with checkpoints (seed 1, M10) | engineering writes cells, project lead runs on Kaggle | pre-registered 2026-10-18; not yet run |
+| Second single-seed run with checkpoints (seed 1, M10) | engineering writes cells, project lead runs on Kaggle | done: run 2026-10-24, result recorded 2026-10-24 (section 4) |
 | After Nov 3: replace the paper's projected numbers (baseline AUC 0.820, convergence by round 38, the basis of the 17.5% time estimate; as listed by the project lead, the paper draft is not in the repository) with measured values, and correct the other hour estimates in docs/06 (low by about 17.5%) | team | planned, after the demo |
 | Number of rounds for the sweep profile (the pilot's validation AUC peaked at round 26 of 50; one seed) | project lead | open |
 | Wire AMP and `channels_last` into training behind flags, then measure the learning effect against the run-to-run spread | project lead | awaiting a decision |
@@ -171,8 +173,8 @@ are not yet verified.
 **Is the quantum part real?** It is a simulator behind an interface designed so a real key-delivery system (ETSI GS QKD 014)
 could replace it. No hardware has been used and the simulated keys are not secret.
 
-**What accuracy do you get?** One measured figure, labelled a single-seed pilot: unsecured FedAvg across 3 simulated hospitals, full
-data, one local epoch per round, 50 rounds, test macro AUC 0.8086 over the 14 pathologies (patient-level split, one seed, no
+**What accuracy do you get?** Two measured figures, each from a single-seed run: unsecured FedAvg across 3 simulated hospitals, full
+data, one local epoch per round, 50 rounds, test macro AUC 0.8086 (seed 0) and 0.8114 (seed 1) over the 14 pathologies (patient-level split, one seed each, no
 confidence interval). It is not the paper baseline and cannot be compared directly with published ChestX-ray14 numbers, which use
 other splits. The protocol produces mean and 95% CI over at least 3 seeds (docs/06); the lite runs only check the pipeline.
 

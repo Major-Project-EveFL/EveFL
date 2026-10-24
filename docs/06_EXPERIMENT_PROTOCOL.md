@@ -456,3 +456,27 @@ differences without a significance statement.
 **If the run dies**, the per-round log saved by this run (the results directory is now created before `tee`) is kept and reported
 as an incomplete run, and the run is repeated with the same settings. The runner has no resume, a known limit.
 **Deviations** from this rule are listed in this file with the reason and the date, as for the sweeps above.
+
+### Outcome of the second single-seed run (recorded 2026-10-24)
+Evidence: `docs/validation/pilot_b0_full_e1_seed1_2026-10-24.json` (computed from the results JSON, not transcribed) and `tests/test_seed1_record.py`. A single-seed run of B0
+(unsecured FedAvg), full data, 3 hospitals, partition seed 42, **run seed 1**, 224 px, **E = 1**, 50 rounds, fp32, cache backend,
+with `--save-model`. Everything else is the pilot's; the config hash differs only through the seed. It is not the paper baseline.
+- **Checks passed before any AUC was read:** all 50 rounds SECURE with no failures; the weights, cache and full-partition index
+  hashes equal the pilot's; the validation AUC over non-thin classes is higher at round 50 than at round 1; both checkpoint files
+  match their manifest SHA-256 and load with `torch.load(..., weights_only=True)` (122 tensors each).
+- **Primary result (no selection): test macro AUC over non-thin classes at round 50 = 0.8114** (pilot 0.8086). **Secondary:** the
+  test-evaluated round with the highest validation AUC is round 30 (validation 0.8212, test 0.8299; pilot round 25, 0.8316).
+- **Demonstration model (decided before this run's test numbers were seen):** the best-validation checkpoint, round 27 (validation
+  AUC 0.8213). Round 27 is not a test-evaluated round, so the checkpoint was evaluated once on the test split afterwards: **test
+  macro AUC 0.8301**, loss 0.1439, 10,889 images, no thin class. That number selects nothing and has no confidence interval.
+- **Side by side with the pilot (no significance statement):** the test AUC at the ten test-evaluated rounds differs between the
+  two seeds by at most 0.0036; both validation curves peak around rounds 26 to 27 and fall afterwards (seed 1: 0.8213 to 0.8029 at
+  round 50). That fewer rounds would suffice is still a hypothesis to test, not a result.
+- **Time:** 14,485 s (4.02 h), 5.9% above the 13,680 s projection and about 10% below the pilot's 16,078 s on the same settings;
+  the cause of the difference between the two sessions is not established. With the pilot this puts the projection tables at low by
+  roughly 6 to 18%, to be corrected after Nov 3 (tracker 8.7).
+- **Deviations recorded:** (1) the notebook version was marked failed because its cell 7 (the checkpoint evaluation) ran on a clone
+  made before `scripts/eval_checkpoint.py` was merged; training, the checks and the saved output were complete, and the evaluation
+  and the sample export were run afterwards in a second short notebook on commit `0a7b13d`. (2) The cache verification cell took
+  about 54 minutes in this session (3,223 s), not the few minutes the runbook assumed. (3) The final-round checkpoint's manifest
+  entry has a null validation AUC (the saver only records it for the best-validation checkpoint); the round-50 value is in the record.

@@ -1,0 +1,534 @@
+{
+  "label": "measured on Kaggle (2 x Tesla T4, one used), second single-seed run of B0 (unsecured FedAvg) with run seed 1 and checkpoints. Values are computed from the results JSON (1.13 MB; kept locally in results/kaggle, git-ignored, not in the repository) and from the one-time evaluation of the best-validation checkpoint on the test split.",
+  "recorded_in_repo_on": "2026-10-24",
+  "defined_in": "docs/06_EXPERIMENT_PROTOCOL.md, 'Pre-registered: second single-seed run with checkpoints (seed 1)' (written 2026-10-18, before the run)",
+  "caveats": [
+    "Single seed (1) with E = 1 local epoch, the same recorded deviation from the E = 5 specification as the pilot: not the paper baseline, no confidence interval, ranks nothing. Together with the pilot (seed 0) it gives two samples, a range and not a significance statement.",
+    "GPU runs with the same seed are not bit-reproducible (docs/validation/image_cache_lite_run_2026-10-15.json), and this run's software environment (Kaggle, Python 3.13, torch 2.11) differs from the CI environment.",
+    "The test split was evaluated at rounds 5, 10, ..., 50 during the run. The best-validation checkpoint is from round 27, which is not one of them, so its test AUC comes from one separate evaluation of that checkpoint on the test split after selection by validation; that number selects nothing.",
+    "The notebook version was marked failed: its cell 7 (the checkpoint evaluation) ran on a clone made before scripts/eval_checkpoint.py was merged. Training, the checks and the saved output were complete; the evaluation and the sample export were run afterwards in a second short notebook on the merged code.",
+    "Numbers are for this split (patient-level, seed 42) and cannot be compared directly with published ChestX-ray14 results, which use other splits."
+  ],
+  "run": {
+    "name": "pilot_b0_full_e1_seed1",
+    "config_hash": "43d0f05de543e4e9",
+    "seed": 1,
+    "partition_seed": 42,
+    "num_rounds": 50,
+    "num_clients": 3,
+    "local_epochs": 1,
+    "batch_size": 32,
+    "image_size": 224,
+    "arithmetic": "fp32",
+    "pretrained": true,
+    "weights_sha256": "9803814b9183a8bdd46cd0c9cd178ec98b51de241084613e975f4fa54d9a57f2",
+    "image_backend": "uint8_cache",
+    "cache_sha256": "db497ea60fdc0f336ac94c3ff8d935bf755ddcb61ea567fa38fb3a01806a456f",
+    "evaluation": {
+      "federated_evaluate": false,
+      "test_eval_every": 5,
+      "val_eval_every": 1
+    },
+    "policy": "global",
+    "intercept_probability": 0.0,
+    "state_counts": {
+      "SECURE": 50
+    },
+    "failures": 0,
+    "rounds_discarded": 0,
+    "participation": {
+      "0": 50,
+      "1": 50,
+      "2": 50
+    },
+    "optimizer": {
+      "name": "adamw",
+      "lr": 0.001,
+      "schedule": "cosine_by_global_round",
+      "weight_decay": 0.01
+    },
+    "code_commit": "1528f55"
+  },
+  "environment": {
+    "python": "3.13.15",
+    "torch": "2.11.0+cu128",
+    "torchvision": "0.26.0+cu128",
+    "numpy": "2.1.3",
+    "device": "cuda: 2 x Tesla T4 (14912 MiB), GPU 0 used, cpu_count 4"
+  },
+  "verified_against_results_json": {
+    "date": "2026-10-24",
+    "file": "pilot_b0_full_e1_seed1.json (original bytes as written by Kaggle)",
+    "sha256": "f8f5282680deda884259c3e9837915761d1629c4304bcb4b05e12eaa686f7b43",
+    "bytes": 1126139,
+    "saved_copy_sha256": "e2800cb10a7e17057cba65f3a949acd07ef6aa6c69e7f538ff42acea89eb7302",
+    "saved_copy_bytes": 1173590,
+    "saved_copy_note": "the copy first saved to results/kaggle differs from the original only in Windows line endings; the parsed content is identical",
+    "rounds_listed": 50,
+    "source": "all values in this file are computed from the JSON, not transcribed",
+    "elapsed_seconds_exact": 14484.778080313,
+    "primary_test_auc_exact": 0.8113916543268817
+  },
+  "checks_before_reading_any_auc": {
+    "state_counts_all_secure_and_no_failures": true,
+    "weights_hash_equals_preregistered": true,
+    "cache_hash_equals_preregistered": true,
+    "partition_counts_identical_to_audited_split": true,
+    "partition_index_hashes_equal_2026_10_04_record": true,
+    "val_auc_star_round_50_above_round_1": true,
+    "checkpoint_sha256_equal_manifest_and_load_with_weights_only": true,
+    "settings_differ_from_pilot_only_in": [
+      "seed",
+      "config_hash",
+      "experiment name",
+      "elapsed_seconds",
+      "profile",
+      "checkpoints"
+    ],
+    "evidence_for_partition_checks": "printed by the run's cell 3 (counts identical: True; index hashes equal the 2026-10-04 record: True)"
+  },
+  "rounds": [
+    {
+      "round": 1,
+      "val_loss": 0.1811,
+      "val_auc_excl_thin": 0.6081
+    },
+    {
+      "round": 2,
+      "val_loss": 0.161,
+      "val_auc_excl_thin": 0.7537
+    },
+    {
+      "round": 3,
+      "val_loss": 0.1567,
+      "val_auc_excl_thin": 0.7681
+    },
+    {
+      "round": 4,
+      "val_loss": 0.1562,
+      "val_auc_excl_thin": 0.7761
+    },
+    {
+      "round": 5,
+      "val_loss": 0.1538,
+      "val_auc_excl_thin": 0.7847,
+      "test_loss": 0.1523,
+      "test_auc_excl_thin": 0.7948
+    },
+    {
+      "round": 6,
+      "val_loss": 0.1524,
+      "val_auc_excl_thin": 0.7906
+    },
+    {
+      "round": 7,
+      "val_loss": 0.1508,
+      "val_auc_excl_thin": 0.796
+    },
+    {
+      "round": 8,
+      "val_loss": 0.1514,
+      "val_auc_excl_thin": 0.7964
+    },
+    {
+      "round": 9,
+      "val_loss": 0.1505,
+      "val_auc_excl_thin": 0.8013
+    },
+    {
+      "round": 10,
+      "val_loss": 0.1488,
+      "val_auc_excl_thin": 0.8057,
+      "test_loss": 0.1468,
+      "test_auc_excl_thin": 0.8158
+    },
+    {
+      "round": 11,
+      "val_loss": 0.1497,
+      "val_auc_excl_thin": 0.8064
+    },
+    {
+      "round": 12,
+      "val_loss": 0.1482,
+      "val_auc_excl_thin": 0.8097
+    },
+    {
+      "round": 13,
+      "val_loss": 0.1481,
+      "val_auc_excl_thin": 0.8116
+    },
+    {
+      "round": 14,
+      "val_loss": 0.148,
+      "val_auc_excl_thin": 0.8126
+    },
+    {
+      "round": 15,
+      "val_loss": 0.1477,
+      "val_auc_excl_thin": 0.8138,
+      "test_loss": 0.1463,
+      "test_auc_excl_thin": 0.8209
+    },
+    {
+      "round": 16,
+      "val_loss": 0.147,
+      "val_auc_excl_thin": 0.8147
+    },
+    {
+      "round": 17,
+      "val_loss": 0.148,
+      "val_auc_excl_thin": 0.8155
+    },
+    {
+      "round": 18,
+      "val_loss": 0.1479,
+      "val_auc_excl_thin": 0.8149
+    },
+    {
+      "round": 19,
+      "val_loss": 0.1465,
+      "val_auc_excl_thin": 0.8185
+    },
+    {
+      "round": 20,
+      "val_loss": 0.1461,
+      "val_auc_excl_thin": 0.8182,
+      "test_loss": 0.144,
+      "test_auc_excl_thin": 0.8277
+    },
+    {
+      "round": 21,
+      "val_loss": 0.1462,
+      "val_auc_excl_thin": 0.8208
+    },
+    {
+      "round": 22,
+      "val_loss": 0.1464,
+      "val_auc_excl_thin": 0.8199
+    },
+    {
+      "round": 23,
+      "val_loss": 0.1461,
+      "val_auc_excl_thin": 0.8194
+    },
+    {
+      "round": 24,
+      "val_loss": 0.1466,
+      "val_auc_excl_thin": 0.8207
+    },
+    {
+      "round": 25,
+      "val_loss": 0.1465,
+      "val_auc_excl_thin": 0.8202,
+      "test_loss": 0.1442,
+      "test_auc_excl_thin": 0.828
+    },
+    {
+      "round": 26,
+      "val_loss": 0.1475,
+      "val_auc_excl_thin": 0.8211
+    },
+    {
+      "round": 27,
+      "val_loss": 0.1465,
+      "val_auc_excl_thin": 0.8213
+    },
+    {
+      "round": 28,
+      "val_loss": 0.1468,
+      "val_auc_excl_thin": 0.8211
+    },
+    {
+      "round": 29,
+      "val_loss": 0.1472,
+      "val_auc_excl_thin": 0.8209
+    },
+    {
+      "round": 30,
+      "val_loss": 0.1471,
+      "val_auc_excl_thin": 0.8212,
+      "test_loss": 0.1445,
+      "test_auc_excl_thin": 0.8299
+    },
+    {
+      "round": 31,
+      "val_loss": 0.1481,
+      "val_auc_excl_thin": 0.8185
+    },
+    {
+      "round": 32,
+      "val_loss": 0.1484,
+      "val_auc_excl_thin": 0.8199
+    },
+    {
+      "round": 33,
+      "val_loss": 0.1491,
+      "val_auc_excl_thin": 0.8176
+    },
+    {
+      "round": 34,
+      "val_loss": 0.1493,
+      "val_auc_excl_thin": 0.8172
+    },
+    {
+      "round": 35,
+      "val_loss": 0.1498,
+      "val_auc_excl_thin": 0.8166,
+      "test_loss": 0.1469,
+      "test_auc_excl_thin": 0.8268
+    },
+    {
+      "round": 36,
+      "val_loss": 0.1503,
+      "val_auc_excl_thin": 0.8149
+    },
+    {
+      "round": 37,
+      "val_loss": 0.1514,
+      "val_auc_excl_thin": 0.8137
+    },
+    {
+      "round": 38,
+      "val_loss": 0.1508,
+      "val_auc_excl_thin": 0.8124
+    },
+    {
+      "round": 39,
+      "val_loss": 0.1522,
+      "val_auc_excl_thin": 0.8119
+    },
+    {
+      "round": 40,
+      "val_loss": 0.1525,
+      "val_auc_excl_thin": 0.8106,
+      "test_loss": 0.1501,
+      "test_auc_excl_thin": 0.8202
+    },
+    {
+      "round": 41,
+      "val_loss": 0.1531,
+      "val_auc_excl_thin": 0.8103
+    },
+    {
+      "round": 42,
+      "val_loss": 0.1533,
+      "val_auc_excl_thin": 0.8096
+    },
+    {
+      "round": 43,
+      "val_loss": 0.1544,
+      "val_auc_excl_thin": 0.8073
+    },
+    {
+      "round": 44,
+      "val_loss": 0.1547,
+      "val_auc_excl_thin": 0.8075
+    },
+    {
+      "round": 45,
+      "val_loss": 0.1554,
+      "val_auc_excl_thin": 0.8058,
+      "test_loss": 0.1536,
+      "test_auc_excl_thin": 0.8146
+    },
+    {
+      "round": 46,
+      "val_loss": 0.1555,
+      "val_auc_excl_thin": 0.8051
+    },
+    {
+      "round": 47,
+      "val_loss": 0.1565,
+      "val_auc_excl_thin": 0.8045
+    },
+    {
+      "round": 48,
+      "val_loss": 0.1575,
+      "val_auc_excl_thin": 0.8036
+    },
+    {
+      "round": 49,
+      "val_loss": 0.1587,
+      "val_auc_excl_thin": 0.8038
+    },
+    {
+      "round": 50,
+      "val_loss": 0.1597,
+      "val_auc_excl_thin": 0.8029,
+      "test_loss": 0.1584,
+      "test_auc_excl_thin": 0.8114
+    }
+  ],
+  "results": {
+    "primary": {
+      "definition": "test macro AUC over non-thin classes at round 50, no selection",
+      "round": 50,
+      "test_auc_excl_thin": 0.8114,
+      "test_loss": 0.1584
+    },
+    "secondary": {
+      "definition": "among the ten test-evaluated rounds, the round with the highest validation AUC* (ties to the later round)",
+      "round": 30,
+      "val_auc_excl_thin": 0.8212,
+      "test_auc_excl_thin": 0.8299,
+      "test_loss": 0.1445
+    },
+    "per_class_test_auc_round_50": {
+      "Atelectasis": 0.789,
+      "Cardiomegaly": 0.904,
+      "Effusion": 0.874,
+      "Infiltration": 0.691,
+      "Mass": 0.839,
+      "Nodule": 0.73,
+      "Pneumonia": 0.721,
+      "Pneumothorax": 0.838,
+      "Consolidation": 0.794,
+      "Edema": 0.895,
+      "Emphysema": 0.884,
+      "Fibrosis": 0.793,
+      "Pleural_Thickening": 0.757,
+      "Hernia": 0.851
+    },
+    "thin_classes_in_test_at_round_50": []
+  },
+  "demonstration_model": {
+    "definition": "best-validation checkpoint, chosen from validation results only before any test number was seen (pre-registered 2026-10-18)",
+    "file": "pilot_b0_full_e1_seed1_best_val.pt",
+    "round": 27,
+    "sha256": "d078b18e6e17ea2fb26d42c035589d0a28a3859eb0f0e8a6754178b24df02ce9",
+    "bytes": 44813515,
+    "val_auc_excl_thin": 0.8213,
+    "test_evaluation": {
+      "how": "this checkpoint evaluated once on the test split by scripts/eval_checkpoint.py after selection; it selects nothing",
+      "test_auc_excl_thin": 0.8301,
+      "test_auc_excl_thin_exact": 0.8301452051319629,
+      "test_loss": 0.1439,
+      "n_test_examples": 10889,
+      "thin_classes": [],
+      "per_class_test_auc": {
+        "Atelectasis": 0.811,
+        "Cardiomegaly": 0.926,
+        "Effusion": 0.887,
+        "Infiltration": 0.711,
+        "Mass": 0.862,
+        "Nodule": 0.75,
+        "Pneumonia": 0.748,
+        "Pneumothorax": 0.876,
+        "Consolidation": 0.82,
+        "Edema": 0.914,
+        "Emphysema": 0.908,
+        "Fibrosis": 0.789,
+        "Pleural_Thickening": 0.781,
+        "Hernia": 0.84
+      },
+      "evaluation_environment": "Kaggle, torch 2.11.0+cu128",
+      "no_confidence_interval": "single model, single evaluation"
+    },
+    "final_round_checkpoint": {
+      "file": "pilot_b0_full_e1_seed1_final.pt",
+      "round": 50,
+      "sha256": "9ee3763b40d632ff767e54f14b6bfc7ea1dca6bb800c4088e01177205e1b1e72",
+      "bytes": 44813131,
+      "note": "kept, not the one served; its validation AUC is not recorded in the manifest (null), the round-50 value is in rounds[]"
+    }
+  },
+  "side_by_side_with_pilot": {
+    "note": "two single-seed runs listed side by side; no significance statement, no confidence interval, no ranking",
+    "primary_test_auc_round_50": {
+      "seed_0_pilot": 0.8086,
+      "seed_1": 0.8114
+    },
+    "secondary_among_tested_rounds": {
+      "seed_0_pilot": {
+        "round": 25,
+        "val": 0.822,
+        "test": 0.8316
+      },
+      "seed_1": {
+        "round": 30,
+        "val": 0.8212,
+        "test": 0.8299
+      }
+    },
+    "peak_validation_auc": {
+      "seed_0_pilot": {
+        "round": 26,
+        "value": 0.823
+      },
+      "seed_1": {
+        "round": 27,
+        "value": 0.8213
+      }
+    },
+    "final_validation_auc": {
+      "seed_0_pilot": 0.803,
+      "seed_1": 0.8029
+    },
+    "test_auc_at_each_tested_round": {
+      "5": {
+        "seed_0_pilot": 0.796,
+        "seed_1": 0.7948
+      },
+      "10": {
+        "seed_0_pilot": 0.8179,
+        "seed_1": 0.8158
+      },
+      "15": {
+        "seed_0_pilot": 0.8242,
+        "seed_1": 0.8209
+      },
+      "20": {
+        "seed_0_pilot": 0.827,
+        "seed_1": 0.8277
+      },
+      "25": {
+        "seed_0_pilot": 0.8316,
+        "seed_1": 0.828
+      },
+      "30": {
+        "seed_0_pilot": 0.8296,
+        "seed_1": 0.8299
+      },
+      "35": {
+        "seed_0_pilot": 0.8249,
+        "seed_1": 0.8268
+      },
+      "40": {
+        "seed_0_pilot": 0.817,
+        "seed_1": 0.8202
+      },
+      "45": {
+        "seed_0_pilot": 0.8119,
+        "seed_1": 0.8146
+      },
+      "50": {
+        "seed_0_pilot": 0.8086,
+        "seed_1": 0.8114
+      }
+    },
+    "max_abs_test_auc_difference_over_tested_rounds": 0.0036,
+    "elapsed_seconds": {
+      "seed_0_pilot": 16077.7,
+      "seed_1": 14484.8
+    }
+  },
+  "observations": {
+    "best_validation_auc_round": 27,
+    "best_validation_auc": 0.8213,
+    "final_validation_auc": 0.8029,
+    "validation_auc_drop_peak_to_final": 0.0184,
+    "min_validation_loss_round": 20,
+    "min_validation_loss": 0.1461,
+    "final_validation_loss": 0.1597,
+    "reading": "Validation AUC rises to a peak at round 27 and then declines while validation loss rises, as in the pilot (peak at round 26). Two seeds show the same shape; that fewer rounds would suffice is still a hypothesis to test, not a result (a sweep would test it)."
+  },
+  "timing": {
+    "elapsed_seconds": 14484.8,
+    "pilot_elapsed_seconds": 16077.7,
+    "measured_over_pilot": 0.901,
+    "notebook_wall_seconds_all_cells": 17761.5,
+    "cache_verification_cell_seconds": 3222.5,
+    "fit_images_per_s": 324.8,
+    "reading": "The same settings took about 10% less time than the pilot on a different Kaggle machine session; the cause is not established and is not claimed. The cache verification cell took about 54 minutes in this session, much longer than the 'few minutes' in the runbook."
+  }
+}

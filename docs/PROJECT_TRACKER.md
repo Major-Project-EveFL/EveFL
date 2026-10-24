@@ -9,7 +9,7 @@ Status words: **DONE** (code, a passing test and, for numbers, a result file exi
 core claim). Sizes are relative effort, not dates: S = a day or less, M = a few days, L = a week or more, C = compute-bound
 (hours on a GPU, not hours of typing).
 
-Counts: DONE 20, PARTIAL 8, TODO 24, WAITING 6, STRETCH 4 (62 items)
+Counts: DONE 22, PARTIAL 7, TODO 24, WAITING 5, STRETCH 4 (62 items)
 
 ## Phase 0: stabilise
 | ID | Item | Status | Evidence / what is left |
@@ -47,7 +47,7 @@ Counts: DONE 20, PARTIAL 8, TODO 24, WAITING 6, STRETCH 4 (62 items)
 | 3.2 | Profiling instrumentation and the uint8 image cache (11.9x faster lite run) | DONE | `docs/validation/image_cache_build_2026-10-12.json`, `docs/validation/image_cache_lite_run_2026-10-15.json` |
 | 3.3 | First measured accuracy: single-seed pilot of B0 (pre-registered), test macro AUC 0.8086 at round 50, E = 1 | DONE | `docs/validation/pilot_b0_full_e1_seed0_2026-10-17.json`; a single seed, not the baseline |
 | 3.4 | Measured baseline: unsecured FedAvg, at least 3 seeds, mean and 95% CI, with config hash | TODO | C: needs a decision on the profile (epochs, data fraction) |
-| 3.6 | Second single-seed run with checkpoints (seed 1), pre-registered | WAITING | C (about 4.5 h): run the cells in `docs/KAGGLE_RUNBOOK.md`; paste the output |
+| 3.6 | Second single-seed run with checkpoints (seed 1), pre-registered | DONE | `docs/validation/pilot_b0_full_e1_seed1_2026-10-24.json`, `tests/test_seed1_record.py`: test AUC* 0.8114 at round 50; the served round-27 checkpoint scores 0.8301 in one separate test evaluation |
 | 3.5 | Checkpoint saving (`--save-model`: final and best-validation checkpoints); resume of a long run is still missing | PARTIAL | `evefl/fl/checkpoint.py`, `tests/test_checkpoint.py`; no resume |
 
 ## Phase 4: crypto integration
@@ -85,7 +85,7 @@ Counts: DONE 20, PARTIAL 8, TODO 24, WAITING 6, STRETCH 4 (62 items)
 | 6.2 | Dashboard reads the current results files (per-round state, QBER, exclusions, AUC curves, timing) | DONE | `evefl/results_view.py`, `dashboard/pages/4_fl_results.py`, `tests/test_results_view.py` (checked on a real tiny run) |
 | 6.3 | Interactive attack lab on the real controller and policy code (Eve slider, per-link, hysteresis) | DONE | `evefl/attack_lab.py`, `dashboard/pages/5_attack_lab.py`, `tests/test_attack_lab.py`; simulated control-plane counts, not accuracy |
 | 6.4 | Secure-aggregation demo page (masked updates look random; the sum is exact; dropout; the N = 3 collusion case) | DONE | `evefl/secagg_demo.py`, `dashboard/pages/6_secure_aggregation.py`, `tests/test_secagg_demo.py`: a simulated library demonstration, not wired into the FL path |
-| 6.5 | Inference page: upload one chest X-ray, get 14 scores, clearly marked research-only | PARTIAL | `evefl/inference.py`, `dashboard/pages/7_upload_xray.py`, `tests/test_inference.py`: built and tested with a random-initialised checkpoint; waits for the seed-1 run's checkpoint (3.6) and its single test evaluation |
+| 6.5 | Inference page: upload one chest X-ray, get 14 scores, clearly marked research-only | DONE | `evefl/inference.py`, `dashboard/pages/7_upload_xray.py`, `tests/test_inference.py`; checked with the real round-27 checkpoint and the 12 exported test images. The checkpoints and images are local and git-ignored, so a new machine needs them copied in |
 | 6.6 | Hospital client and server as separate processes: Flower gRPC with mutual TLS | TODO | L |
 | 6.7 | Local data ingestion for a real hospital (DICOM to the model's 224 px input, label mapping) | TODO | L: the dataset class expects the NIH folder and CSV layout |
 | 6.8 | Docker and compose, Prometheus and W&B, hash-chained audit log | TODO | L |
@@ -106,8 +106,8 @@ Counts: DONE 20, PARTIAL 8, TODO 24, WAITING 6, STRETCH 4 (62 items)
 | 8.3 | Citations verified by DOI (QKDFL, FedSec and the others; P1-10) | WAITING | S/M: the team must check each entry |
 | 8.4 | Paper Section VIII numbers replaced by measured ones (P1-7) | TODO | follows Phase 5 |
 | 8.5 | Mentor reference thesis and handoff material kept out of the repository | DONE | `.gitignore` |
-| 8.6 | AFTER NOV 3: replace the paper's projected numbers (baseline AUC 0.820, convergence by round 38, the basis of the 17.5% time estimate) with measured values | TODO | numbers as listed by the project lead; the paper draft is not in the repository. Measured so far: a single-seed pilot at 0.8086 (E = 1), see `docs/validation/pilot_b0_full_e1_seed0_2026-10-17.json` |
-| 8.7 | AFTER NOV 3: correct the other hour estimates in docs/06 (low by about 17.5% after the pilot: 16,078 s measured against 13,680 s projected) | TODO | S |
+| 8.6 | AFTER NOV 3: replace the paper's projected numbers (baseline AUC 0.820, convergence by round 38, the basis of the 17.5% time estimate) with measured values | TODO | numbers as listed by the project lead; the paper draft is not in the repository. Measured so far: a single-seed pilot at 0.8086 (E = 1) and a second single-seed run at 0.8114, see `docs/validation/pilot_b0_full_e1_seed0_2026-10-17.json` and `docs/validation/pilot_b0_full_e1_seed1_2026-10-24.json` |
+| 8.7 | AFTER NOV 3: correct the other hour estimates in docs/06 (low by roughly 6 to 18% after two runs: 16,078 s and 14,485 s measured against 13,680 s projected) | TODO | S |
 
 ## What a hospital or a company can do today, and what they cannot
 - **Today:** nothing with their own images. The three "hospitals" are three patient-level partitions of the public ChestX-ray14

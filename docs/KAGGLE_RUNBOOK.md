@@ -464,7 +464,7 @@ print("counts identical to the audited split:", all(meta["audit"]["stats"][k] ==
 print("numpy", meta["numpy_version"], "| index hashes equal the 2026-10-04 record:", meta["index_sha256"] == recorded)
 assert meta["audit"]["ok"], "STOP: partition overlap"
 ```
-4. **Verify the attached cache** (a few minutes; it also warms the page cache):
+4. **Verify the attached cache** (it also warms the page cache; a few minutes in some sessions, 54 minutes (3,223 s) in the seed-1 session):
 ```python
 %cd /kaggle/temp/EveFL
 !python scripts/build_image_cache.py --data-root {DATA} --verify {CACHE} --verify-sample 200
@@ -571,6 +571,25 @@ print(json.dumps(json.load(open("/kaggle/working/results/eval_best_val_seed1.jso
 ```
 After downloading, put the two `.pt` files in `checkpoints/` and the exported folder in `demo_samples/` (both git-ignored); the
 "Try the model" page finds them there.
+
+**If cells 7 and 8 fail because the clone predates the merge** (as on 2026-10-24: `can't open file .../eval_checkpoint.py`), the
+version is marked failed but its output is kept, so do not rerun the 4 h run. Download its output, then in a new short GPU notebook
+(same three datasets, plus **Add data > Notebooks** with that output) run G1, G2 and the full partition, skip the cache verification,
+and run:
+```python
+%cd /kaggle/temp/EveFL
+import hashlib, json
+found = find_files("/kaggle/input", ["pilot_b0_full_e1_seed1_best_val.pt", "pilot_b0_full_e1_seed1.json"], max_depth=9)
+assert all(len(v) == 1 for v in found.values()), found
+BEST = found["pilot_b0_full_e1_seed1_best_val.pt"][0]
+m = json.load(open(found["pilot_b0_full_e1_seed1.json"][0]))["experiment"]["checkpoints"]["best_validation"]
+assert sha256_of(BEST) == m["sha256"], "STOP: checkpoint differs from the manifest"
+!mkdir -p /kaggle/working/results
+!python scripts/eval_checkpoint.py --checkpoint {BEST} --data-root {DATA} --partition-root /kaggle/working/partitions_full \
+    --image-backend uint8_cache --image-cache-root {CACHE} --output /kaggle/working/results/eval_best_val_seed1.json
+!python scripts/export_demo_samples.py --data-root {DATA} --partition-root /kaggle/working/partitions_full \
+    --output /kaggle/working/demo_samples --n 12 --seed 0
+```
 
 Download from the notebook's **Output** tab: use **Download all** (the whole output is about 110 MB: results, log, two checkpoints, samples) and
 unzip it into `results/kaggle/` (checkpoints go into `checkpoints/`; both folders are git-ignored). Clicking a single `.json` link

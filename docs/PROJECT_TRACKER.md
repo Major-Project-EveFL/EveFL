@@ -9,7 +9,7 @@ Status words: **DONE** (code, a passing test and, for numbers, a result file exi
 core claim). Sizes are relative effort, not dates: S = a day or less, M = a few days, L = a week or more, C = compute-bound
 (hours on a GPU, not hours of typing).
 
-Counts: DONE 19, PARTIAL 7, TODO 26, WAITING 6, STRETCH 4 (62 items)
+Counts: DONE 20, PARTIAL 8, TODO 24, WAITING 6, STRETCH 4 (62 items)
 
 ## Phase 0: stabilise
 | ID | Item | Status | Evidence / what is left |
@@ -84,8 +84,8 @@ Counts: DONE 19, PARTIAL 7, TODO 26, WAITING 6, STRETCH 4 (62 items)
 | 6.1 | Dashboard: four pages that render | PARTIAL | `dashboard/app.py`, `dashboard/pages/`: the results page now reads current files; the QBER page uses the Qiskit reference backend instead of the fast NumPy one, the controller page predates the policy modes, and the crypto page is an honest placeholder for CKKS and Groth16 |
 | 6.2 | Dashboard reads the current results files (per-round state, QBER, exclusions, AUC curves, timing) | DONE | `evefl/results_view.py`, `dashboard/pages/4_fl_results.py`, `tests/test_results_view.py` (checked on a real tiny run) |
 | 6.3 | Interactive attack lab on the real controller and policy code (Eve slider, per-link, hysteresis) | DONE | `evefl/attack_lab.py`, `dashboard/pages/5_attack_lab.py`, `tests/test_attack_lab.py`; simulated control-plane counts, not accuracy |
-| 6.4 | Secure-aggregation demo page (masked updates look random; the sum is exact; the N = 3 collusion case) | TODO | M: after 4.5 |
-| 6.5 | Inference page: upload one chest X-ray, get 14 probabilities, clearly marked research-only | TODO | M: needs 3.5 and a trained model |
+| 6.4 | Secure-aggregation demo page (masked updates look random; the sum is exact; dropout; the N = 3 collusion case) | DONE | `evefl/secagg_demo.py`, `dashboard/pages/6_secure_aggregation.py`, `tests/test_secagg_demo.py`: a simulated library demonstration, not wired into the FL path |
+| 6.5 | Inference page: upload one chest X-ray, get 14 scores, clearly marked research-only | PARTIAL | `evefl/inference.py`, `dashboard/pages/7_upload_xray.py`, `tests/test_inference.py`: built and tested with a random-initialised checkpoint; waits for the seed-1 run's checkpoint (3.6) and its single test evaluation |
 | 6.6 | Hospital client and server as separate processes: Flower gRPC with mutual TLS | TODO | L |
 | 6.7 | Local data ingestion for a real hospital (DICOM to the model's 224 px input, label mapping) | TODO | L: the dataset class expects the NIH folder and CSV layout |
 | 6.8 | Docker and compose, Prometheus and W&B, hash-chained audit log | TODO | L |

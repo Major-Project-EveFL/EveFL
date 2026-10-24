@@ -20,6 +20,7 @@ from __future__ import annotations
 import importlib.util
 import os
 import shutil
+import sys
 
 import numpy as np
 import pandas as pd
@@ -90,6 +91,16 @@ def _fail_if_required_tool_missing(request):
     reason = getattr(request.node, "stash_missing_tool", None)
     if reason:
         pytest.fail(f"required optional tool missing (--require-optional-tools): {reason}", pytrace=False)
+
+
+@pytest.fixture(autouse=True)
+def _keep_main_module():
+    """Streamlit's AppTest leaves sys.modules['__main__'] pointing at the page it ran. Windows DataLoader workers (spawn)
+    re-run `__main__` from its file, so a later test with num_workers > 0 would re-execute the page and crash."""
+    main = sys.modules.get("__main__")
+    yield
+    if main is not None:
+        sys.modules["__main__"] = main
 
 
 @pytest.fixture

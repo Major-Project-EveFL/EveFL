@@ -8,6 +8,8 @@ Navigation:
     - LIVE: 3-State Security Controller
     - LIVE: Attack lab (Eve on a link, three policies compared; simulated control-plane counts)
     - LIVE: Crypto Pipeline Demo (AES-GCM real, CKKS/Groth16 STUB)
+    - LIVE: Secure aggregation (library demonstration; simulated, not wired into the FL path)
+    - LIVE: Try the model (research prototype, not diagnostic; needs a saved checkpoint)
     - STATIC: Results explorer (the committed pilot record and any results JSON)
 
 The Results explorer does NOT run training.
@@ -39,6 +41,8 @@ These compute on-the-fly using the EveFL library:
 - **Security Controller** — See how QBER maps to SECURE / CAUTION / LOCKDOWN
 - **Attack lab** — Put Eve on a link and compare the three round policies (simulated control-plane counts, not accuracy)
 - **Crypto Pipeline** — AES-256-GCM live demo (CKKS & Groth16 are stubs)
+- **Secure aggregation** — masked updates, the exact sum, a dropout and a colluding server (a library demonstration, not wired into training)
+- **Try the model** — score a public sample or an uploaded chest X-ray with a saved checkpoint (research prototype, not diagnostic)
 
 ### 📊 RESULTS Panel
 Reads recorded experiment output only:

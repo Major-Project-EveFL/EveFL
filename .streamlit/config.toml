@@ -1,0 +1,13 @@
+# Read when `streamlit run dashboard/app.py` is started from the repository root.
+[theme]
+base = "dark"
+primaryColor = "#22d3ee"
+backgroundColor = "#0b1020"
+secondaryBackgroundColor = "#121a30"
+textColor = "#e6ecff"
+
+[client]
+toolbarMode = "minimal"      # hides the Deploy button for presentations
+
+[browser]
+gatherUsageStats = false

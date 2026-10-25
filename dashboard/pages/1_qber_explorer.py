@@ -18,7 +18,10 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from evefl.quantum.bb84 import BB84Protocol
 
-st.set_page_config(page_title="QBER Explorer", page_icon="🔐")
+try:
+    st.set_page_config(page_title="QBER Explorer", page_icon="🔐")
+except st.errors.StreamlitAPIException:
+    pass  # dashboard/app.py has already set it for the whole app (set_page_config is allowed once per run)
 
 st.title("🔐 BB84 / QBER Explorer")
 

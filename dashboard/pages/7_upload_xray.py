@@ -23,7 +23,10 @@ from evefl import inference as inf  # noqa: E402
 CHECKPOINT_DIR = Path(os.environ.get("EVEFL_CHECKPOINT_DIR", REPO_ROOT / "checkpoints"))
 SAMPLES_DIR = Path(os.environ.get("EVEFL_DEMO_SAMPLES", REPO_ROOT / "demo_samples"))
 
-st.set_page_config(page_title="Try the model", page_icon="🩻", layout="wide")
+try:
+    st.set_page_config(page_title="Try the model", page_icon="🩻", layout="wide")
+except st.errors.StreamlitAPIException:
+    pass  # dashboard/app.py has already set it for the whole app (set_page_config is allowed once per run)
 st.title("🩻 Try the model on a chest X-ray")
 st.warning("**This is a research prototype and is not diagnostic.** It scores a picture with a model trained on a public dataset "
            "(NIH ChestX-ray14) in a simulation of three hospitals. The numbers are model scores, not diagnoses, are not calibrated "

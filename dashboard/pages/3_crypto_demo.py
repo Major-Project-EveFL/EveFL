@@ -18,7 +18,10 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from evefl.crypto.classical import ClassicalCipherSuite
 
-st.set_page_config(page_title="Crypto Demo", page_icon="🔒")
+try:
+    st.set_page_config(page_title="Crypto Demo", page_icon="🔒")
+except st.errors.StreamlitAPIException:
+    pass  # dashboard/app.py has already set it for the whole app (set_page_config is allowed once per run)
 
 st.title("🔒 Crypto Pipeline Demo")
 

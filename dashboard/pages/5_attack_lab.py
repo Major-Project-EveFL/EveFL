@@ -17,7 +17,10 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from evefl import attack_lab as lab  # noqa: E402
 
-st.set_page_config(page_title="Attack lab", page_icon="🛡️", layout="wide")
+try:
+    st.set_page_config(page_title="Attack lab", page_icon="🛡️", layout="wide")
+except st.errors.StreamlitAPIException:
+    pass  # dashboard/app.py has already set it for the whole app (set_page_config is allowed once per run)
 st.title("🛡️ Attack lab")
 st.warning(lab.LABEL)
 st.caption("QBER on a link under an intercept-resend Eve with intercept probability alpha and baseline noise e: "

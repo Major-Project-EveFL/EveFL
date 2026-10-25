@@ -1,26 +1,68 @@
 # EveFL
 
-**Quantum channel-aware adaptive orchestration for Federated Learning security.**
+**Quantum channel-aware federated learning for multi-hospital chest X-ray classification.**
 
-EveFL monitors the quantum bit error rate (QBER) of a simulated BB84 key exchange to detect eavesdropping in real time and respond with a graduated three-state aggregation policy — without ever halting training unnecessarily.
+EveFL reads the quantum bit error rate (QBER) of a **simulated** BB84 key exchange on each hospital's link to the server, and uses it to decide, round by round and link by link, whether a hospital's model update is used. The response is graduated (use it, use it with care, set it aside) instead of a binary pause.
+
+> **Research prototype.** The quantum layer is a simulator: its keys are seed-determined and not secret, and nothing here has been run on QKD hardware. The classifier is not diagnostic. Atria Institute of Technology (VTU), Dept. of AI&ML, final-year major project (SDGs 3, 9, 17).
 
 ---
 
-## What EveFL actually does (and does not do)
+## What EveFL does (and does not do)
 
 > **The quantum layer monitors the communication channel, not the data.**
 
-In standard FL, hospitals train ResNet-18 on their local chest X-ray images and send gradient updates to a central server. Those gradients travel over a network channel that classical TLS encrypts but *cannot* **monitor** for active interception.
+Hospitals train a ResNet-18 on their own chest X-ray images and send model updates to a central server. Before each round, a simulated BB84 exchange runs on each hospital's link. If an eavesdropper (Eve) intercepts photons she raises the QBER, and the controller reacts:
 
-EveFL adds a parallel BB84 quantum key distribution simulation. Before every FL round, Alice (client) and Bob (server) exchange simulated photons. If Eve intercepts photons, she introduces errors in Bob's measurements — a signal that appears as elevated Quantum Bit Error Rate (QBER). EveFL uses this QBER as a live orchestration signal:
+| QBER | State | What the code does |
+|------|-------|--------------------|
+| < 5% (configurable heuristic) | **SECURE** | plain weighted FedAvg |
+| 5% up to 11% | **CAUTION** | FedProx local training (mu = 0.01), learning rate halved, median/MAD anomaly down-weighting of flagged updates (needs at least 3 updates) |
+| >= 11% (fixed, never configurable below 0.11) | **LOCKDOWN** | in the global modes the whole round is discarded: the last good model is kept and re-keying is flagged as recommended; in `per_client` mode only the affected link's client is excluded (not sent the model, update never aggregated), and the round is discarded only below `min_clients` |
 
-| QBER | State | What EveFL does |
-|------|-------|-----------------|
-| < 5% | **SECURE** | Standard FedAvg with AES-256-GCM encrypted gradients |
-| 5 – 11% | **CAUTION** | FedProx (proximal term μ=0.01) + gradient norm anomaly scoring |
-| ≥ 11% | **LOCKDOWN** | Discard round, keep previous model, trigger BB84 re-keying |
+The 11% constant is the BB84 asymptotic bound (Shor-Preskill 2000). Three policy modes exist behind one interface: `global_binary`, `global` and `per_client` (see `docs/adr/0002-per-client-decisions-and-hysteresis.md`). The X-ray images never leave a hospital and the quantum simulation never touches them.
 
-The X-ray images never leave their hospital. ResNet-18 trains on them locally. The quantum simulation never touches the image data.
+**Not yet part of the training path:** link encryption (HKDF + AES-256-GCM) and secure aggregation exist as tested libraries and demonstrations, but are not wired into the federated-learning loop. CKKS and the Groth16 norm proof are optional modules that are not integrated.
+
+---
+
+## Status
+
+Labels: **measured** = a run that produced a result file; **simulated** = a model or simulator we wrote; **library** = implemented and tested, not wired into training.
+
+| Area | State | Label / evidence |
+|------|-------|------------------|
+| BB84 simulation with a channel model (noise, intercept-resend) | implemented | simulated; exact NumPy backend (default) and a Qiskit reference, cross-checked |
+| QBER controller, three policy modes, hysteresis | implemented, 100% branch coverage of the controller and policy modules | simulated |
+| Key layer (separate 2^17-qubit block, Cascade, Toeplitz privacy amplification, finite-key bound) | implemented | simulated |
+| Link protection (bound HKDF, AES-256-GCM, single use, zeroization) | tested library | library; not wired into the FL path |
+| Secure aggregation (pairwise masking) | fixed-point codec and mask generator built; seed provider and aggregator not built | library; demonstration page only |
+| Federated pipeline (Flower strategy and client, sequential runner, patient-level Dirichlet(0.5) partition, uint8 image cache) | implemented | audited on the real metadata |
+| Accuracy | two single-seed runs, unsecured FedAvg, 3 simulated hospitals, 1 local epoch, 50 rounds: test macro AUC 0.8086 (seed 0) and 0.8114 (seed 1) at round 50 | **measured**, Kaggle; no confidence interval, not a baseline, not comparable with published ChestX-ray14 numbers |
+| Dashboard | 7 pages | see below |
+| Docker packaging, mutual-TLS client/server processes, post-quantum key exchange | not started | |
+
+The full decision log, results and limits (with a reviewer Q&A) are in [docs/DECISIONS.md](docs/DECISIONS.md); the item-by-item status is in [docs/PROJECT_TRACKER.md](docs/PROJECT_TRACKER.md).
+
+---
+
+## Dashboard
+
+```bash
+streamlit run dashboard/app.py
+```
+
+| Page | What it shows | Label |
+|------|---------------|-------|
+| BB84 / QBER Explorer | a key exchange with a configurable Eve | simulated |
+| 3-State Security Controller | how QBER maps to SECURE / CAUTION / LOCKDOWN | simulated |
+| Crypto Pipeline Demo | AES-256-GCM on an update (CKKS and Groth16 are stubs) | AES real, others stub |
+| Results explorer | recorded runs: validation and test AUC per round, per-class AUC, settings | recorded results only |
+| Attack lab | Eve on one link, the three policies compared | simulated control-plane counts, not accuracy |
+| Secure aggregation | masked updates, the exact sum, a dropout, a colluding server | library demonstration, not wired into training |
+| Try the model | score a sample or an uploaded chest X-ray | research prototype, **not diagnostic** |
+
+"Try the model" needs a saved checkpoint in `checkpoints/` and (for samples) images in `demo_samples/`. Both are git-ignored; see [docs/DEMO.md](docs/DEMO.md) and [docs/KAGGLE_RUNBOOK.md](docs/KAGGLE_RUNBOOK.md).
 
 ---
 
@@ -28,63 +70,42 @@ The X-ray images never leave their hospital. ResNet-18 trains on them locally. T
 
 ```
 evefl/
-├── quantum/              # BB84 QKD simulation (Qiskit) — QBER signal generator
-│   ├── base.py           # QKDProtocol abstract interface
-│   └── bb84.py           # BB84 + Eve intercept-resend with configurable alpha
-├── crypto/               # Gradient encryption
-│   ├── base.py           # CipherSuite abstract interface
-│   └── classical.py      # SHA-256 → HKDF-SHA256 → AES-256-GCM
-├── orchestration/        # Three-state controller (pure logic, no ML deps)
-│   └── state_machine.py
-├── fl/                   # Flower FL integration (Phase 4)
-│   ├── model.py          # ResNet-18 with 14-output sigmoid head
-│   ├── dataset.py        # ChestX-ray14 loader + Dirichlet(α=0.5) partitioner
-│   ├── strategy.py       # QBER-aware Flower Strategy ← wires everything together
-│   ├── client.py         # Flower NumPyClient (upcoming)
-│   └── server.py         # Entry point (upcoming)
-├── dashboard/            # Streamlit UI (Phase 5)
-├── tracking/             # W&B logging (Phase 5)
-├── config/
-│   └── settings.yaml     # Thresholds, active backends — tune without touching code
-└── registry.py           # Plug-in registry used by all subsystems
+├── quantum/          # BB84 simulation: base interfaces, bb84_numpy (default), bb84 (Qiskit reference),
+│                     #   key layer (postprocess, round_keys), seeding, theory, sweeps, validation
+├── crypto/           # linkkeys + keymanager (bound HKDF, AES-256-GCM), secagg/ (fixed point, mask PRG),
+│                     #   classical, optional ckks / homomorphic / zkproof / groth16
+├── orchestration/    # state_machine + policy: pure logic, imports no qiskit, flwr or torch
+├── fl/               # model, dataset, partition, imagecache, strategy, client, screening, schedule,
+│                     #   channels, control_sim, runner (sequential), evaluation, checkpoint, server
+├── inference.py      # loads a saved checkpoint and scores one image (used by the dashboard)
+├── results_view.py   # reads recorded results for the explorer
+├── attack_lab.py     # the attack lab's simulation
+├── secagg_demo.py    # the secure-aggregation demonstration
+├── config/settings.yaml
+└── registry.py       # every pluggable component sits behind an ABC and is registered here
+dashboard/            # Streamlit app and pages
+scripts/              # smoke test, experiment runner, partition audit, image cache, checkpoint evaluation, sweeps
+docs/                 # context, architecture, security model, known issues, roadmap, experiment protocol, decisions
+tests/
 ```
 
-**Per-round flow:**
+**Per-round flow (global mode):**
 
 ```
 configure_fit()
 │
-├─ BB84 engine × N clients → [QBER_0, QBER_1, QBER_2]
+├─ BB84 exchange per client  →  QBER estimate per link (a sampled estimate, never the simulation's ground truth)
 │
-├─ max(QBER) → StateController → SECURE / CAUTION / LOCKDOWN
+├─ policy  →  SECURE / CAUTION / LOCKDOWN decision (per round, or per client in per_client mode)
 │
-└─ FitIns injected with {state, proximal_mu, round_id} → clients
+└─ each client is told: train, train with a FedProx term, or sit out
 
 aggregate_fit()
 │
-├─ SECURE  → weighted FedAvg
-├─ CAUTION → anomaly scoring + downweight suspicious gradients
-└─ LOCKDOWN → return last good model, trigger BB84 re-key
+├─ SECURE   → weighted FedAvg
+├─ CAUTION  → FedAvg with anomaly down-weighting of flagged updates
+└─ LOCKDOWN → global modes: discard the round, keep the last good model; per_client mode: exclude that link only
 ```
-
----
-
-## Status
-
-| Phase | Component | Status |
-|-------|-----------|--------|
-| 1 | BB84 QKD simulation (Qiskit) + configurable Eve alpha | ✅ Done |
-| 2 | Crypto stack (SHA-256 / HKDF / AES-256-GCM) | ✅ Done |
-| 3 | Three-state QBER controller | ✅ Done |
-| 4 | Flower FL integration | ✅ Done |
-| 4a | ResNet-18 model (`fl/model.py`) | ✅ Done |
-| 4b | ChestX-ray14 dataset + Dirichlet partitioner (`fl/dataset.py`) | ✅ Done |
-| 4c | QBER-aware Strategy (`fl/strategy.py`) | ✅ Done |
-| 4d | Flower client (`fl/client.py`) | ✅ Done |
-| 4e | Server entry point (`fl/server.py`) | ✅ Done |
-| 5 | Streamlit dashboard + W&B tracking | 🔄 In progress |
-| 6 | Docker packaging | 🔄 In progress |
-| Stretch | Post-quantum fallback (CRYSTALS-Kyber) | ⏳ Not started |
 
 ---
 
@@ -97,44 +118,22 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-> Python 3.12 is pinned — Qiskit and Pydantic have dependency conflicts on 3.14.
-
-Uncomment the Phase 4+ dependencies in `requirements.txt` before running FL:
-
-```
-flwr==1.13.0
-torch==2.5.1
-torchvision==0.20.1
-```
-
----
+Python 3.12 is pinned and every dependency version is pinned. Kaggle runs use a different environment (Python 3.13); see [docs/KAGGLE_RUNBOOK.md](docs/KAGGLE_RUNBOOK.md). `circom` and `snarkjs` are needed only for the Groth16 tests, which skip when they are missing.
 
 ## Quick start
 
-**Run tests (Phases 1–3):**
-
 ```bash
-pytest -v
+pytest -q
+python scripts/smoke_test.py --high-intercept-test
+streamlit run dashboard/app.py
 ```
 
-**Partition the dataset once before FL training:**
-
-```python
-from evefl.fl.dataset import partition_and_save
-
-partition_and_save(
-    data_root      = "/path/to/chestxray14",
-    partition_root = "/path/to/chestxray14/partitions",
-    subset_fraction = 0.15,   # use 0.15 for fast debugging, 1.0 for full eval
-)
-```
-
-**Try the QBER controller standalone:**
+The full test suite takes several minutes. The QBER controller on its own:
 
 ```python
 from evefl.orchestration.state_machine import StateController
 from evefl.quantum.base import ChannelModel
-from evefl.quantum.bb84_numpy import BB84NumpyProtocol   # fast, exact; "bb84" is the slow Qiskit reference
+from evefl.quantum.bb84_numpy import BB84NumpyProtocol   # fast and exact; "bb84" is the slow Qiskit reference
 
 bb84       = BB84NumpyProtocol(seed=42)
 controller = StateController()
@@ -144,30 +143,24 @@ channel    = ChannelModel(intercept_probability=0.3, bit_flip_probability=0.0)
 result     = bb84.run_exchange(n_qubits=1024, channel=channel)
 transition = controller.update(result.qber)
 
-print(f"QBER: {result.qber:.3f}  →  State: {transition.new_state.value}")
-# QBER: 0.094  →  State: CAUTION   (a 128-bit sample, so the estimate is noisy)
+print(f"QBER: {result.qber:.3f}  ->  State: {transition.new_state.value}")
+# a 128-bit sample, so the estimate is noisy
 ```
+
+Training on the real dataset (NIH ChestX-ray14, downloaded separately from [NIH Box](https://nihcc.app.box.com/v/ChestXray-NIHCC); no data is stored in this repository) is described, with the exact commands used for the measured runs, in [docs/KAGGLE_RUNBOOK.md](docs/KAGGLE_RUNBOOK.md). How numbers are produced is fixed in advance in [docs/06_EXPERIMENT_PROTOCOL.md](docs/06_EXPERIMENT_PROTOCOL.md).
 
 ---
 
 ## Configuration
 
-All thresholds and active backends are in `evefl/config/settings.yaml`. No code changes needed to retune the state machine or swap the cipher suite.
+Thresholds and active backends are in `evefl/config/settings.yaml`. The 5% CAUTION boundary is a configurable heuristic; the 11% LOCKDOWN threshold is guarded in code and cannot be set below 0.11.
 
 ```yaml
 orchestration:
   thresholds:
-    secure_max:  0.05   # QBER < 5%  → SECURE
-    caution_max: 0.11   # 5% ≤ QBER < 11% → CAUTION
-                        # QBER ≥ 11% → LOCKDOWN
+    secure_max:  0.05   # QBER < 5%  -> SECURE
+    caution_max: 0.11   # 5% <= QBER < 11% -> CAUTION; QBER >= 11% -> LOCKDOWN (never lower than 0.11)
 ```
-
----
-
-## Requirements
-
-- Python 3.12 (pinned)
-- NIH ChestX-ray14 dataset — download from [NIH Box](https://nihcc.app.box.com/v/ChestXray-NIHCC)
 
 ---
 

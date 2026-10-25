@@ -1,7 +1,7 @@
 # EveFL: decisions, architecture, results and limits
 
 A single place to answer "what did you decide, why, and what is the evidence". It is a living log: a change that decides
-something, or a result that arrives, adds a line here in the same pull request. Last reviewed: 2026-10-18.
+something, or a result that arrives, adds a line here in the same pull request. Last reviewed: 2026-10-24.
 
 How to read it
 - **Evidence** points to a file in this repository. "Decided in chat" means the project lead decided it in conversation and no
@@ -18,7 +18,7 @@ quantum-key-distribution link** per hospital supplies two things: a QBER reading
 (SECURE / CAUTION / LOCKDOWN) deciding whether a hospital's update is used, and key material that protects the update on the
 wire. The quantum layer is a simulator: the keys are seed-determined and **not secret**, and nothing here has been measured on
 QKD hardware. The project is a research prototype with tests and recorded results; it is not a certified or deployed system.
-**No model-accuracy baseline has been produced yet** (there is one single-seed pilot at one local epoch); the lite runs are
+**No model-accuracy baseline has been produced yet** (there are two single-seed runs at one local epoch); the lite runs are
 pipeline checks.
 
 ## 2. Architecture at a glance
@@ -32,6 +32,7 @@ pipeline checks.
 | FL runner | single-process sequential driver around Flower's strategy and client | implemented | `evefl/fl/runner.py` |
 | Data | patient-level disjoint train, validation and test splits, Dirichlet(0.5) across hospitals | implemented, verified on the real metadata | `docs/validation/partition_audit_real.json` |
 | Image backends | PNG decode (default, reference) or pre-resized uint8 cache | implemented, accepted | docs/06, `docs/validation/image_cache_build_2026-10-12.json` |
+| Dashboard and demo | seven pages (QBER explorer, controller, crypto demo, results explorer, attack lab, secure-aggregation demonstration, try-the-model), a run order and a list of claims not to make | implemented; the secure-aggregation page is a library demonstration and the model page is not diagnostic | `dashboard/`, `docs/DEMO.md` |
 | CKKS, Groth16 norm proof | modules exist, optional | **not integrated** | docs/04 P1-9 |
 | Kyber / ML-KEM, NSGA-II supervisor | not implemented; the key combiner is KEM-ready | out of scope for now | ADR 0003, decided in chat |
 

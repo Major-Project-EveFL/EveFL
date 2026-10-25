@@ -14,7 +14,10 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from evefl.orchestration.state_machine import SecurityState, StateController, StateThresholds
 
-st.set_page_config(page_title="Security Controller", page_icon="🛡️")
+try:
+    st.set_page_config(page_title="Security Controller", page_icon="🛡️")
+except st.errors.StreamlitAPIException:
+    pass  # dashboard/app.py has already set it for the whole app (set_page_config is allowed once per run)
 
 st.title("🛡️ 3-State Security Controller + Policy Demo")
 

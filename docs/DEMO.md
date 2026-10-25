@@ -9,7 +9,7 @@ section 8 is the place to rehearse answers. Nothing here is a clinical or securi
    (setup in the [README](../README.md)). Run `pytest -q -x` once at home; it takes several minutes, so not on the day.
 2. Copy the two git-ignored folders from the development machine: `checkpoints/` (the two `.pt` files, about 90 MB) and
    `demo_samples/` (12 public test-split images and `samples.json`). Without them "Try the model" shows a "no checkpoint" message.
-3. `streamlit run dashboard/app.py`, then **open every page once**. The first load of a page takes about 15 to 20 seconds on the
+3. `streamlit run dashboard/app.py` from the repository root (the theme is read from `.streamlit/config.toml`), then **open every page once**. The first load of a page takes about 15 to 20 seconds on the
    development laptop (imports); later loads are quick.
 4. Turn the wifi off and click through once to confirm nothing needs the internet. Plug in the charger, set the display to never sleep.
 5. Record a 5 to 8 minute screen capture of the full run order below as a backup, and keep it on the laptop.
@@ -17,7 +17,7 @@ section 8 is the place to rehearse answers. Nothing here is a clinical or securi
 ## Run order (about 12 minutes)
 | # | Page | Do | Say (one line) | Do not say |
 |---|------|----|----------------|------------|
-| 1 | Home | show the page list | "A simulated quantum channel monitor decides which hospital updates a federated model may use." | that the quantum part is real hardware |
+| 1 | Mission Control | read the headline numbers, then press **Run live system check** | "Every line below is produced by running the real code right now: the controller, the simulated key exchange, link protection, secure aggregation, the recorded audit, the model." | that the check is a security certification (it is a smoke check), or that the quantum part is real hardware |
 | 2 | BB84 / QBER Explorer | raise Eve's interception and watch QBER rise | "Eve's interception raises the error rate by about a quarter of her interception probability." | that the keys are secret (they are seed-determined) |
 | 3 | 3-State Security Controller | step through SECURE, CAUTION, LOCKDOWN | "Below 5% we train normally; 5 to 11% we train with care; at 11% or more we stop using that link. The 11% is the BB84 bound and is fixed." | that 5% is a proven bound (it is a configurable heuristic) |
 | 4 | Attack lab | put Eve on one link, compare the three policies | "With Eve on one link, the per-client policy keeps training the clean hospitals; a binary pause stops the whole round." | that this improves accuracy: it counts client-rounds, simulated, accuracy was not measured |

@@ -18,7 +18,10 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from evefl import results_view as rv  # noqa: E402
 
-st.set_page_config(page_title="Results explorer", page_icon="📊", layout="wide")
+try:
+    st.set_page_config(page_title="Results explorer", page_icon="📊", layout="wide")
+except st.errors.StreamlitAPIException:
+    pass  # dashboard/app.py has already set it for the whole app (set_page_config is allowed once per run)
 st.title("📊 Results explorer")
 st.caption("Shows measured results that already exist. It does not run training. Every number carries the label it was recorded with.")
 

@@ -9,7 +9,7 @@ Status words: **DONE** (code, a passing test and, for numbers, a result file exi
 core claim). Sizes are relative effort, not dates: S = a day or less, M = a few days, L = a week or more, C = compute-bound
 (hours on a GPU, not hours of typing).
 
-Counts: DONE 24, PARTIAL 6, TODO 24, WAITING 5, STRETCH 4 (63 items)
+Counts: DONE 25, PARTIAL 6, TODO 28, WAITING 5, STRETCH 4 (68 items)
 
 ## Phase 0: stabilise
 | ID | Item | Status | Evidence / what is left |
@@ -92,6 +92,11 @@ Counts: DONE 24, PARTIAL 6, TODO 24, WAITING 5, STRETCH 4 (63 items)
 | 6.9 | mkdocs site, SECURITY.md, SBOM, lockfile, release v0.1.0 | TODO | M |
 | 6.10 | A fresh clone reproduces one scenario from the README alone | TODO | M: depends on 0.5 |
 | 6.11 | Demo guide for 3 November: run order, quotable numbers, claims not to make, fallbacks | DONE | `docs/DEMO.md`; the backup screen recording is still to be made by the team |
+| 6.12 | Design system, grouped navigation and Mission Control home with a live system check that runs the real code | DONE | `dashboard/theme.py`, `dashboard/app.py`, `dashboard/pages/0_mission_control.py`, `evefl/selfcheck.py`, `tests/test_dashboard_home.py` |
+| 6.13 | Live network page: three hospitals, the server and Eve on any link, QBER gauges and states changing, driven by the real policy code | TODO | M |
+| 6.14 | Evidence board: tests, modules, ADRs and validation records counted from the repository, both seeds' curves overlaid | TODO | M |
+| 6.15 | Demo preflight script (go / no-go before the demo) and friendly error pages instead of tracebacks | TODO | S/M |
+| 6.16 | Guided tour mode that walks the run order of docs/DEMO.md | TODO | S/M |
 
 ## Phase 7: stretch
 | ID | Item | Status | Evidence / what is left |

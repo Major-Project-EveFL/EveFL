@@ -9,7 +9,7 @@ Status words: **DONE** (code, a passing test and, for numbers, a result file exi
 core claim). Sizes are relative effort, not dates: S = a day or less, M = a few days, L = a week or more, C = compute-bound
 (hours on a GPU, not hours of typing).
 
-Counts: DONE 25, PARTIAL 6, TODO 28, WAITING 5, STRETCH 4 (68 items)
+Counts: DONE 26, PARTIAL 6, TODO 30, WAITING 5, STRETCH 4 (71 items)
 
 ## Phase 0: stabilise
 | ID | Item | Status | Evidence / what is left |
@@ -92,11 +92,14 @@ Counts: DONE 25, PARTIAL 6, TODO 28, WAITING 5, STRETCH 4 (68 items)
 | 6.9 | mkdocs site, SECURITY.md, SBOM, lockfile, release v0.1.0 | TODO | M |
 | 6.10 | A fresh clone reproduces one scenario from the README alone | TODO | M: depends on 0.5 |
 | 6.11 | Demo guide for 3 November: run order, quotable numbers, claims not to make, fallbacks | DONE | `docs/DEMO.md`; the backup screen recording is still to be made by the team |
-| 6.12 | Design system, grouped navigation and Mission Control home with a live system check that runs the real code | DONE | `dashboard/theme.py`, `dashboard/app.py`, `dashboard/pages/0_mission_control.py`, `evefl/selfcheck.py`, `tests/test_dashboard_home.py` |
-| 6.13 | Live network page: three hospitals, the server and Eve on any link, QBER gauges and states changing, driven by the real policy code | TODO | M |
-| 6.14 | Evidence board: tests, modules, ADRs and validation records counted from the repository, both seeds' curves overlaid | TODO | M |
-| 6.15 | Demo preflight script (go / no-go before the demo) and friendly error pages instead of tracebacks | TODO | S/M |
-| 6.16 | Guided tour mode that walks the run order of docs/DEMO.md | TODO | S/M |
+| 6.12 | Streamlit design system, grouped navigation and Mission Control home with a live system check (kept as the emergency fallback) | DONE | `dashboard/theme.py`, `dashboard/app.py`, `evefl/selfcheck.py`, `tests/test_dashboard_home.py` |
+| 6.13 | Web app: Live network page (three hospitals, the server and Eve on any link, QBER gauges, states changing, the three policies compared; real policy code) | TODO | M |
+| 6.14 | Web app: Evidence board (tests, modules, ADRs and validation records counted from the repository; both seeds' curves overlaid) | TODO | M |
+| 6.15 | Demo preflight script (go / no-go before the demo); the web app already shows a friendly page instead of a trace on a page error | TODO | S/M |
+| 6.16 | Web app: presenter mode that walks the run order of docs/DEMO.md with speaker notes | TODO | S/M |
+| 6.17 | Demo web app core: standard-library server with security headers, design system, router, Mission Control with the live system check streamed from the real code (no new dependency) | DONE | `evefl/webapp/`, `tests/test_webapp_server.py`, `tests/test_webapp_static.py`; run with `python -m evefl.webapp` |
+| 6.18 | Web app: port the Results, Try the model, Secure aggregation, QBER explorer and controller pages | TODO | M/L |
+| 6.19 | Retire the Streamlit dashboard once the web app has passed rehearsals (it stays as the fallback until then) | TODO | S |
 
 ## Phase 7: stretch
 | ID | Item | Status | Evidence / what is left |

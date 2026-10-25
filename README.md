@@ -4,7 +4,7 @@
 
 EveFL reads the quantum bit error rate (QBER) of a **simulated** BB84 key exchange on each hospital's link to the server, and uses it to decide, round by round and link by link, whether a hospital's model update is used. The response is graduated (use it, use it with care, set it aside) instead of a binary pause.
 
-> **Research prototype.** The quantum layer is a simulator: its keys are seed-determined and not secret, and nothing here has been run on QKD hardware. The classifier is not diagnostic. Atria Institute of Technology (VTU), Dept. of AI&ML, final-year major project (SDGs 3, 9, 17).
+> **Final-year major project**, Atria Institute of Technology (VTU), Dept. of AI&ML (SDGs 3, 9, 17). Its limits are part of the result: the quantum layer is a simulator, its keys are seed-determined and not secret, nothing here has been run on QKD hardware, and the classifier is not diagnostic.
 
 ---
 
@@ -46,7 +46,15 @@ The full decision log, results and limits (with a reviewer Q&A) are in [docs/DEC
 
 ---
 
-## Dashboard
+## Demo app
+
+```bash
+python -m evefl.webapp          # opens http://localhost:8765
+```
+
+A small web app (standard library server, hand-written front end, no internet needed) that binds to the loopback interface only. Today it has **Mission Control**: the headline numbers read from the recorded results and a live system check that runs the real code (controller thresholds, BB84 simulator, link protection, secure-aggregation sum, recorded audit and runs, model load). The remaining pages are being ported from the Streamlit dashboard below, which stays as the fallback.
+
+## Streamlit dashboard (fallback)
 
 ```bash
 streamlit run dashboard/app.py
@@ -77,6 +85,8 @@ evefl/
 ├── orchestration/    # state_machine + policy: pure logic, imports no qiskit, flwr or torch
 ├── fl/               # model, dataset, partition, imagecache, strategy, client, screening, schedule,
 │                     #   channels, control_sim, runner (sequential), evaluation, checkpoint, server
+├── webapp/           # the demo web app: stdlib server, JSON data layer, static front end
+├── selfcheck.py      # the live system check (real library calls) and showcase.py (headline numbers)
 ├── inference.py      # loads a saved checkpoint and scores one image (used by the dashboard)
 ├── results_view.py   # reads recorded results for the explorer
 ├── attack_lab.py     # the attack lab's simulation

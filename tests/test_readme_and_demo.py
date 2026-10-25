@@ -30,7 +30,7 @@ def test_every_relative_markdown_link_resolves():
 
 def test_the_readme_keeps_its_honesty_statements_and_makes_no_forbidden_claim():
     text = _text(README)
-    for phrase in ("Research prototype", "not diagnostic", "not wired into the FL path", "simulator", "not secret",
+    for phrase in ("Final-year major project", "not diagnostic", "not wired into the FL path", "simulator", "not secret",
                    "no confidence interval", "never configurable below 0.11"):
         assert phrase in text, phrase
     assert not any(bad in text.lower() for bad in FORBIDDEN)

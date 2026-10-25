@@ -12,6 +12,9 @@ readme = "README.md"
 [tool.setuptools.packages.find]
 include = ["evefl*"]
 
+[tool.setuptools.package-data]
+evefl = ["webapp/static/**/*"]   # the demo web app's front end ships inside the package
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-m 'not slow'"

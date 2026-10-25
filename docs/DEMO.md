@@ -9,7 +9,7 @@ section 8 is the place to rehearse answers. Nothing here is a clinical or securi
    (setup in the [README](../README.md)). Run `pytest -q -x` once at home; it takes several minutes, so not on the day.
 2. Copy the two git-ignored folders from the development machine: `checkpoints/` (the two `.pt` files, about 90 MB) and
    `demo_samples/` (12 public test-split images and `samples.json`). Without them "Try the model" shows a "no checkpoint" message.
-3. `streamlit run dashboard/app.py` from the repository root (the theme is read from `.streamlit/config.toml`), then **open every page once**. The first load of a page takes about 15 to 20 seconds on the
+3. Start the demo app with `python -m evefl.webapp` (Mission Control and the live check), and, until the other pages are ported, the Streamlit dashboard with `streamlit run dashboard/app.py` from the repository root for the rest. **Open every page once.** The first load of a page takes about 15 to 20 seconds on the
    development laptop (imports); later loads are quick.
 4. Turn the wifi off and click through once to confirm nothing needs the internet. Plug in the charger, set the display to never sleep.
 5. Record a 5 to 8 minute screen capture of the full run order below as a backup, and keep it on the laptop.

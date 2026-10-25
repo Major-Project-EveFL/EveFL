@@ -9,7 +9,7 @@ Status words: **DONE** (code, a passing test and, for numbers, a result file exi
 core claim). Sizes are relative effort, not dates: S = a day or less, M = a few days, L = a week or more, C = compute-bound
 (hours on a GPU, not hours of typing).
 
-Counts: DONE 22, PARTIAL 7, TODO 24, WAITING 5, STRETCH 4 (62 items)
+Counts: DONE 24, PARTIAL 6, TODO 24, WAITING 5, STRETCH 4 (63 items)
 
 ## Phase 0: stabilise
 | ID | Item | Status | Evidence / what is left |
@@ -18,7 +18,7 @@ Counts: DONE 22, PARTIAL 7, TODO 24, WAITING 5, STRETCH 4 (62 items)
 | 0.2 | P0-7 (`local_epochs` hardcoded, CUDA seeding): the epochs flag is honoured and the runner is single-process; the entry in docs/04 is stale | PARTIAL | S: update the docs/04 entry with the evidence (`evefl/fl/client.py`) |
 | 0.3 | ruff, mypy, CI (lint, tests, Groth16 jobs, nightly validation) | DONE | `.github/workflows/ci.yml`, `.github/workflows/nightly-validation.yml` |
 | 0.4 | pre-commit configuration | DONE | `.pre-commit-config.yaml` (present; not re-verified) |
-| 0.5 | README matches reality (P2-1) | PARTIAL | S/M: the README architecture tree and status table are older than the code |
+| 0.5 | README matches reality (P2-1) | DONE | `README.md`: status table with measured / simulated / library labels, current architecture tree, the seven dashboard pages, and what is not wired into training |
 | 0.6 | Small bugs P2-2 (missing f-string) and P2-5 (client floor hang) | TODO | S: each with a test first |
 | 0.7 | Tests for strategy, client, dataset, aggregation, integration (P2-6) | PARTIAL | M: 46 test files; the dashboard has no tests |
 | 0.8 | Team metadata consistent across documents (P2-8: guide name, one USN) | WAITING | S: needs the team to confirm |
@@ -91,6 +91,7 @@ Counts: DONE 22, PARTIAL 7, TODO 24, WAITING 5, STRETCH 4 (62 items)
 | 6.8 | Docker and compose, Prometheus and W&B, hash-chained audit log | TODO | L |
 | 6.9 | mkdocs site, SECURITY.md, SBOM, lockfile, release v0.1.0 | TODO | M |
 | 6.10 | A fresh clone reproduces one scenario from the README alone | TODO | M: depends on 0.5 |
+| 6.11 | Demo guide for 3 November: run order, quotable numbers, claims not to make, fallbacks | DONE | `docs/DEMO.md`; the backup screen recording is still to be made by the team |
 
 ## Phase 7: stretch
 | ID | Item | Status | Evidence / what is left |
